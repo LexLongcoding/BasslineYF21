@@ -1,4 +1,11 @@
-## Bassline YF-21 v0.1.0 - first build
+## Bassline YF-21 v0.1.1
+
+- New: user manual (PDF, included in every download): installing, every control, the sequencer and its symbols,
+  step and live recording, PATTERN and FREE modes in a DAW, tempo and sync, MIDI learn, patches and patterns,
+  sound design tips and troubleshooting.
+- Windows build: cleaned up compiler warnings.
+
+## v0.1.0 - first build
 
 Acid bass synthesizer with a 16-step sequencer, VST3 + Standalone for Windows and Linux.
 

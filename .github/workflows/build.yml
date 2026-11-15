@@ -44,6 +44,7 @@ jobs:
           Copy-Item packaging/INSTALL-Windows.txt $out/
           Copy-Item LICENSE $out/LICENSE.txt
           Copy-Item THIRD-PARTY-NOTICES.md $out/
+          Copy-Item docs/BasslineYF21-User-Manual.pdf $out/
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip"
 
       - uses: actions/upload-artifact@v4
@@ -80,6 +81,7 @@ jobs:
           cp packaging/INSTALL-Linux.txt $out/
           cp LICENSE $out/LICENSE.txt
           cp THIRD-PARTY-NOTICES.md $out/
+          cp docs/BasslineYF21-User-Manual.pdf $out/
           tar czf $out.tar.gz $out
 
       - uses: actions/upload-artifact@v4
@@ -107,6 +109,7 @@ jobs:
           tag="${TAG}"
           mv dist/BasslineYF21-Windows.zip "dist/BasslineYF21-${tag}-Windows-x64.zip"
           mv dist/BasslineYF21-Linux-x86_64.tar.gz "dist/BasslineYF21-${tag}-Linux-x86_64.tar.gz"
+          cp docs/BasslineYF21-User-Manual.pdf "dist/BasslineYF21-${tag}-User-Manual.pdf"
           ls -la dist
 
       - uses: softprops/action-gh-release@v2

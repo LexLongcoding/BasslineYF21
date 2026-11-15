@@ -404,6 +404,17 @@ int main (int argc, char** argv)
             auto f2 = outDir.getChildFile ("editor_learn.png");
             f2.deleteFile();
             if (auto os = f2.createOutputStream()) png.writeImageToStream (img2, *os);
+
+            // step record: stopped, REC armed, cursor on step 5
+            e->setLearnMode (false);
+            render (*p, 0.3, { { 0, juce::MidiMessage::noteOff (1, 24) } });
+            p->setRecord (true);
+            p->setEditStep (4);
+            for (int i = 0; i < 3; ++i) { render (*p, 0.05); juce::MessageManager::getInstance()->runDispatchLoopUntil (40); }
+            auto img3 = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1.0f);
+            auto f3 = outDir.getChildFile ("editor_steprec.png");
+            f3.deleteFile();
+            if (auto os = f3.createOutputStream()) png.writeImageToStream (img3, *os);
         }
         ed.reset();
     }

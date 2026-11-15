@@ -1,6 +1,6 @@
 # Bassline YF-21 - project notes (for contributors and for resuming work)
 
-Last updated: 2026-11-14, version 0.1.0. License: AGPL-3.0-or-later, copyright LexLongcoding.
+Last updated: 2026-11-14, version 0.1.1. License: AGPL-3.0-or-later, copyright LexLongcoding.
 Sister project: Decu6000 (drum machine) - same fonts, colours, knob drawing, LCD, patch system and MIDI learn.
 
 ## What it is
@@ -42,7 +42,7 @@ Name is a Macross Plus reference (owner's choice). References: Roland TB-303, Ko
 ## Source map
 | File | Role |
 |---|---|
-| `Source/Parameters.h` | All 63 parameters (id, name, label, range, skew, default, unit, choices, inPatch) |
+| `Source/Parameters.h` | All 60 parameters (id, name, label, range, skew, default, unit, choices, inPatch) |
 | `Source/AcidVoice.h` | The voice: glide, envelopes, accent sweep, oscs, filter, effects |
 | `Source/Oscillator.h`, `Wavetables.h` | Oscillators and generated wavetables |
 | `Source/Filter.h`, `Envelope.h`, `Lfo.h`, `Effects.h` | DSP building blocks |
@@ -55,6 +55,7 @@ Name is a Macross Plus reference (owner's choice). References: Roland TB-303, Ko
 | `Source/UI/Widgets.*` | Knob, ParamToggle, ParamCombo, LCD, BPM display, meter, scope, learn overlay |
 | `Source/UI/SynthPanels.*` | OSC (with waveform preview), LFO, FILTER, AMP, FOLD, DIST, SCOPE, MASTER |
 | `Source/UI/SequencerPanel.*` | Transport, slots, pattern menu, step grid + symbols, mini keyboard |
+| `docs/manual/make_manual.py` | Builds `docs/BasslineYF21-User-Manual.pdf` (reads Parameters.h, FactoryPatches.h, FactoryPatterns.h) |
 
 ## Testing
 - `Tests/voice_render_test.cpp` (no JUCE) - 26 renders / checks.
@@ -70,5 +71,4 @@ Name is a Macross Plus reference (owner's choice). References: Roland TB-303, Ko
 
 ## Possible next steps
 - Run in a real DAW (check trigger keys / transpose / SYNC vs RETRIG while recording).
-- User manual PDF (Decu has a generator script that could be adapted).
 - Ideas offered: drag-out MIDI clip, pattern chaining, a delay effect, macOS build.
