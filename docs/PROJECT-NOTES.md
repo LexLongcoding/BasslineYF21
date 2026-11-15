@@ -1,6 +1,6 @@
 # Bassline YF-21 - project notes (for contributors and for resuming work)
 
-Last updated: 2026-11-14, version 0.1.2. License: AGPL-3.0-or-later, copyright LexLongcoding.
+Last updated: 2026-11-14, version 0.1.3. License: AGPL-3.0-or-later, copyright LexLongcoding.
 Sister project: Decu6000 (drum machine) - same fonts, colours, knob drawing, LCD, patch system and MIDI learn.
 
 ## What it is
@@ -28,6 +28,7 @@ Name is a Macross Plus reference (owner's choice). References: Roland TB-303, Ko
     number of pattern lengths just shifts the clock (no skip, no double trigger).
   - Drag-out MIDI and transport free-run were offered and **not** wanted (for now).
   - The on-screen keyboard always plays the synth / records; it never triggers slots.
+  - A trigger key also selects its slot in the editor (owner expected the grid to follow the playing pattern).
 - **Recording**: REC + stopped = step record at the cursor; REC + PLAY = live record, quantised to the
   nearest step (the step is suppressed for the rest of that pass so it isn't heard twice). Legato = slide on
   the previous recorded step. Recording always goes into the selected (edit) slot.
@@ -69,7 +70,7 @@ Name is a Macross Plus reference (owner's choice). References: Roland TB-303, Ko
 
 ## Testing
 - `Tests/voice_render_test.cpp` (no JUCE) - 26 renders / checks.
-- `YF21Tests` (`-DYF21_BUILD_TESTS=ON`) - 57 checks + editor screenshots; `YF21HostTest` loads the .vst3.
+- `YF21Tests` (`-DYF21_BUILD_TESTS=ON`) - 61 checks + editor screenshots; `YF21HostTest` loads the .vst3.
 - Headless Linux machines without ALSA / Xrandr headers: configure with `-DYF21_HEADLESS_TEST_BUILD=ON`
   and `CXXFLAGS="-DJUCE_USE_XRANDR=0 -DJUCE_USE_XINERAMA=0 -DJUCE_USE_XCURSOR=0 -DJUCE_USE_XRENDER=0"`
   (the flags reach JUCE's juceaide helper build too).

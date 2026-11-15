@@ -410,6 +410,27 @@ int main (int argc, char** argv)
         p->setPlayHead (nullptr);
     }
 
+    // ---------------------------------------------------------------- switching slots with trigger keys
+    for (int startMode = 0; startMode < 2; ++startMode)
+    {
+        auto p = fresh();
+        TestPlayHead ph; ph.playing = true; ph.bpm = 120.0;
+        p->setPlayHead (&ph);
+        setParam (*p, "seq_start", static_cast<float> (startMode));
+        p->setEditSlot (5);
+        std::vector<int> seen;   // slots played, in order (stopped moments left out)
+        // C0 (slot 1), then D0 (slot 3) with a gap, then E0 (slot 5) overlapping D0
+        render (*p, 3.0, { { 0, juce::MidiMessage::noteOn (1, 24, 0.8f) },     { 40000, juce::MidiMessage::noteOff (1, 24) },
+                           { 48000, juce::MidiMessage::noteOn (1, 26, 0.8f) }, { 90000, juce::MidiMessage::noteOn (1, 28, 0.8f) },
+                           { 96000, juce::MidiMessage::noteOff (1, 26) } }, &ph,
+               [&] (juce::int64) { const int s = p->getPlayingSlot(); if (s >= 0 && (seen.empty() || seen.back() != s)) seen.push_back (s); });
+        juce::String order; for (int v : seen) order << v + 1 << " ";
+        const bool ok = seen == std::vector<int> { 0, 2, 4 };
+        check (ok, juce::String (startMode ? "SYNC" : "RETRIG") + ": trigger keys switch slots (played: " + order.trim() + ")");
+        check (p->getEditSlot() == 4, juce::String (startMode ? "SYNC" : "RETRIG") + ": the editor follows the triggered slot");
+        p->setPlayHead (nullptr);
+    }
+
     // ---------------------------------------------------------------- panic
     {
         auto p = fresh();

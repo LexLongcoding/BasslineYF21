@@ -403,7 +403,10 @@ void BasslineAudioProcessor::handleMidi (const juce::MidiMessage& m, int sample,
                     seq.setTranspose (0);
                 }
                 else if (seq.getSlot() != triggerNotes.top() - trigBase)
+                {
                     seq.setSlot (triggerNotes.top() - trigBase);
+                    editSlot.store (triggerNotes.top() - trigBase);   // the editor shows what's playing
+                }
                 break;
             case Role::None:
             default: break;
@@ -421,6 +424,7 @@ void BasslineAudioProcessor::handleMidi (const juce::MidiMessage& m, int sample,
         role = Role::Trigger;
         const int slot = note - trigBase;
         triggerNotes.push (note);
+        editSlot.store (slot);                    // the editor follows the slot the DAW plays
         const bool retrig = pv (ix.start) < 0.5f;
         if (seq.isRunning() && seqFromTrigger && ! retrig)
             seq.setSlot (slot);                   // SYNC: switch slot without losing the bar position

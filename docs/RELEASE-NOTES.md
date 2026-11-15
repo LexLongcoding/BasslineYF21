@@ -1,4 +1,10 @@
-## Bassline YF-21 v0.1.2
+## Bassline YF-21 v0.1.3
+
+- The sequencer grid now follows the trigger keys: when a key plays a slot, that slot is shown (and its steps light
+  up), so switching patterns from the DAW is visible. Before, the grid stayed on the last slot you clicked.
+- Manual: notes that slots are saved with the project (no saving needed) and that slots 9-16 start empty.
+
+## v0.1.2
 
 - Fixed: when the DAW looped, step 1 of the pattern could be skipped on every repeat. This happened in DAWs that
   deliver the slot key at a loop restart at the start of the next audio block, a few milliseconds after the bar.

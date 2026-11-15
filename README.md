@@ -37,7 +37,7 @@ slide-and-accent sequencer sound - with modern extras:
 
 | Mode | Low keys (TRIGGER KEYS, default C0-D#1) | Other keys |
 |---|---|---|
-| **PATTERN** | Hold a key to play slot 1-16, locked to the DAW. Release (or stop the DAW) to stop. | While a slot is held: transpose it relative to C3 (E3 = +4, A2 = -3). With no slot held: play the synth. |
+| **PATTERN** | Hold a key to play slot 1-16, locked to the DAW. Release (or stop the DAW) to stop. The grid shows the slot being played. | While a slot is held: transpose it relative to C3 (E3 = +4, A2 = -3). With no slot held: play the synth. |
 | **FREE** | Play the synth | Play the synth |
 
 Playing the synth directly (FREE mode, or PATTERN mode with no slot held) behaves like the hardware:
@@ -95,7 +95,7 @@ Control ranges, defaults and menu choices are read from `Source/Parameters.h`; s
 ### Tests
 - `Tests/voice_render_test.cpp` - DSP only, no JUCE: renders the voice through filter modes, waves and
   effects to WAV and checks levels. `g++ -std=c++17 -O2 -ISource Tests/voice_render_test.cpp`
-- `-DYF21_BUILD_TESTS=ON` builds `YF21Tests` (57 checks: trigger keys, stuck-note cases, panic, DAW loops, transpose, FREE mode slides,
+- `-DYF21_BUILD_TESTS=ON` builds `YF21Tests` (61 checks: trigger keys, slot switching, stuck-note cases, panic, DAW loops, transpose, FREE mode slides,
   SYNC/RETRIG starts, host tempo, step + live record, 303 slide gating, CC learn, state round trip,
   every factory patch, editor screenshots) and `YF21HostTest` (loads the built .vst3 like a DAW).
 

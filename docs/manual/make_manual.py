@@ -519,6 +519,10 @@ story += [P("PATTERN mode: playing slots from the piano roll", "h2")]
 story += bullets([
     f"Draw a long <b>{first}</b> note: slot 1 plays for as long as the note lasts. {trig_name(25)} plays slot 2, and so "
     f"on up to {last} for slot 16. Change notes to change patterns - per bar, per phrase, wherever you like.",
+    "The grid follows: whenever a trigger key plays a slot, the sequencer shows that slot, so you always see (and "
+    "can edit) the pattern that's playing. Slots 9-16 start empty - fill them before triggering them.",
+    "Nothing needs saving for this: all 16 slots are stored with your DAW project. Saving to the pattern library is "
+    "only for using a pattern in other projects.",
     "<b>Transpose:</b> while a slot note is held, add a higher note. Its distance from <b>C3</b> (middle C) shifts the "
     "pattern: E3 = up 4 semitones, A2 = down 3, C4 = up an octave. When the transpose note ends, the pattern returns "
     "to its written key.",
@@ -681,6 +685,8 @@ trouble = [
     ("The pattern doesn't follow the DAW tempo", "Switch SYNC on (header)."),
     ("Nothing happens when I press PLAY in a DAW",
      "Check the track is armed / monitoring so you can hear the instrument, and that MASTER VOLUME isn't down."),
+    ("A trigger key plays nothing", "That slot is empty (slots 9-16 start empty). The grid shows the slot when its key "
+     "is played - fill it, or load a pattern into it from the pattern LCD."),
     ("Recording doesn't change anything",
      "Recording goes into the selected (orange) slot. In live record, notes go to the nearest step of that slot."),
     ("No sound from the Standalone",
