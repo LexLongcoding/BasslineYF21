@@ -10,10 +10,17 @@
 // Wave numbers: 0 SAW 1 SQUARE 2 TRI 3 SINE 4 FORMANT 5 ORGAN 6 SYNC 7 FOLD 8 BITS 9 PHASE 10 GLASS 11 HARMONIC
 namespace FactoryPatches
 {
+    struct Value
+    {
+        const char* id;
+        float value;
+        Value (const char* i, double v) : id (i), value (static_cast<float> (v)) {}   // ints and floats alike
+    };
+
     struct Patch
     {
         const char* name;
-        std::vector<std::pair<const char*, float>> values;
+        std::vector<Value> values;
     };
 
     inline const std::vector<Patch>& all()
