@@ -1,0 +1,26 @@
+BASSLINE YF-21 - Windows (64-bit)
+=================================
+
+VST3 PLUGIN
+  1. Copy the whole "Bassline YF-21.vst3" folder to:
+       C:\Program Files\Common Files\VST3\
+     (Windows will ask for administrator permission - click Continue.)
+  2. In your DAW, rescan plugins. Bassline YF-21 appears as an instrument.
+
+STANDALONE
+  Double-click "Bassline YF-21.exe" - no install needed.
+  Click "Options" (top-left) -> "Audio/MIDI Settings..." to choose your audio
+  output and tick your keyboard / controller under "Active MIDI inputs".
+
+  Windows may show "Windows protected your PC" the first time, because the app
+  isn't signed with a paid code-signing certificate. Click "More info" ->
+  "Run anyway". This only happens once.
+
+PATCHES AND PATTERNS
+  Saved patches:   %APPDATA%\Bassline YF-21\Patches
+  Saved patterns:  %APPDATA%\Bassline YF-21\Patterns
+  (paste into the Explorer address bar). The Standalone and the VST3 share them.
+
+LICENSE
+  Bassline YF-21 is free, open-source software under the GNU AGPL v3.0 or later
+  (see LICENSE.txt).
