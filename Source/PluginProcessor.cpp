@@ -240,9 +240,14 @@ void BasslineAudioProcessor::readVoiceSettings (VoiceSettings& s)
     s.volume = pv (ix.volume); s.tuneCents = pv (ix.tune);
 }
 
+// Host position (in steps) at a sample of this block. If the DAW's loop end falls inside
+// the block, positions after it are wrapped back to the loop start.
 double BasslineAudioProcessor::hostPositionAt (int sample) const
 {
-    return (host.ppq + sample * blockBeatsPerSample) * 4.0;
+    double q = host.ppq + sample * blockBeatsPerSample;
+    if (host.looping && q >= host.loopEnd)
+        q -= host.loopEnd - host.loopStart;
+    return q * 4.0;
 }
 
 void BasslineAudioProcessor::startSequencer (int slot, int sample, bool fromTrigger)
@@ -254,11 +259,13 @@ void BasslineAudioProcessor::startSequencer (int slot, int sample, bool fromTrig
     {
         pos = hostPositionAt (sample);
         const bool retrig = pv (ix.start) < 0.5f;
-        offset = retrig ? seq.firstStepFrom (pos) : 0;   // RETRIG: step 1 on the next 16th; SYNC: locked to the bar
+        offset = retrig ? seq.firstStepFrom (pos, lateSteps) : 0;   // RETRIG: step 1 now / next 16th; SYNC: locked to the bar
     }
     if (seqOwnsVoice && voice.isGateOn() && liveNotes.count == 0)
         voice.noteOff();
-    seq.start (slot, pos, offset);
+    // A key that arrives up to one audio block after a step started (DAWs often deliver notes at a
+    // loop restart at the start of the next block) still plays that step, slightly late.
+    seq.start (slot, pos, offset, followHost ? lateSteps : 0.0);
     seqFromTrigger = fromTrigger;
     seqOwnsVoice = false;
 }
@@ -457,6 +464,14 @@ void BasslineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
             hostPlayingNow = host.playing;
             if (auto b = pos->getBpm()) { host.bpm = *b; host.hasBpm = *b > 1.0; }
             if (auto q = pos->getPpqPosition()) host.ppq = *q; else host.playing = false;
+            if (pos->getIsLooping())
+                if (auto lp = pos->getLoopPoints())
+                    if (lp->ppqEnd > lp->ppqStart + 1.0e-3 && host.ppq < lp->ppqEnd)
+                    {
+                        host.looping = true;
+                        host.loopStart = lp->ppqStart;
+                        host.loopEnd = lp->ppqEnd;
+                    }
         }
     if (panicRequested.exchange (false))
     {
@@ -490,8 +505,9 @@ void BasslineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
     // ---- sequencer
     seq.setTiming (blockStepsPerSample, pv (ix.swing), pv (ix.gate));
+    lateSteps = juce::jmin (0.25, (numSamples + 2) * blockStepsPerSample);
     if (seq.isRunning() && host.playing)
-        seq.follow (hostPositionAt (0));
+        seq.follow (hostPositionAt (0), lateSteps, bank.length (seq.getSlot()));
 
     // internal PLAY (only when no trigger key is holding a slot)
     if (triggerNotes.count == 0)
@@ -539,6 +555,11 @@ void BasslineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
                 handleMidi ((*midiIt).getMessage(), t, false);
                 ++midiIt;
             }
+
+            // the DAW's loop end inside this block: wrap the sequencer exactly there
+            if (host.playing && host.looping && seq.isRunning() && seq.getPosition() >= host.loopEnd * 4.0 - 1.0e-9)
+                seq.follow (seq.getPosition() - (host.loopEnd - host.loopStart) * 4.0, 2.0 * blockStepsPerSample + 1.0e-6,
+                            bank.length (seq.getSlot()));
 
             Sequencer::Event ev[3];
             const int ne = seq.tick (bank, ev);

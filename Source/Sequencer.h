@@ -21,15 +21,17 @@ public:
         bool accent = false, legato = false;
     };
 
-    // stepOffset: absolute step that plays pattern step 1 (0 = locked to the bar)
-    void start (int newSlot, double position, long long stepOffset)
+    // stepOffset: absolute step that plays pattern step 1 (0 = locked to the bar).
+    // late: a step that started up to this many steps ago still plays (now, slightly late)
+    // rather than being skipped - host positions arrive once per audio block.
+    void start (int newSlot, double position, long long stepOffset, double late = 0.0)
     {
         slot = newSlot;
         offset = stepOffset;
         running = true;
         gateOpen = slideHold = false;
         suppress = -1;
-        jumpTo (position);
+        jumpTo (position, late);
     }
 
     void stop() { running = false; gateOpen = slideHold = false; playingStep = -1; }
@@ -50,20 +52,37 @@ public:
     void setTranspose (int semis) { transpose = semis; }
 
     // Follow the host: jump only when the position really moved (loop / locate).
-    void follow (double hostPosition)
+    // A jump by a whole number of pattern lengths (a DAW loop that's a multiple of the
+    // pattern) just moves the clock: nothing is skipped or played twice.
+    void follow (double hostPosition, double late, int patternLength)
     {
-        if (std::fabs (hostPosition - pos) > 0.05)
-            jumpTo (hostPosition);
-        else
+        const double d = pos - hostPosition;
+        if (std::fabs (d) <= 0.05)
+        {
             pos = hostPosition;
+            return;
+        }
+        const auto whole = static_cast<long long> (std::llround (d));
+        const long long period = patternLength % 2 == 0 ? patternLength : 2LL * patternLength;   // keeps swing parity
+        if (std::fabs (d - static_cast<double> (whole)) < 0.05 && period > 0 && whole % period == 0)
+        {
+            pos = hostPosition;
+            nextIndex -= whole;
+            nextTime = stepTime (nextIndex);
+            gateOffAt -= static_cast<double> (whole);
+            if (suppress >= 0) suppress -= whole;
+            return;
+        }
+        jumpTo (hostPosition, late);
     }
 
-    // First absolute step that starts at or after `position`.
-    long long firstStepFrom (double position) const
+    // First absolute step that starts at or after `position - late`.
+    long long firstStepFrom (double position, double late = 0.0) const
     {
+        const double from = position - late - 1.0e-9;
         long long k = static_cast<long long> (std::floor (position));
-        while (stepTime (k) < position - 1.0e-9) ++k;
-        while (k > 0 && stepTime (k - 1) >= position - 1.0e-9) --k;
+        while (stepTime (k) < from) ++k;
+        while (stepTime (k - 1) >= from) --k;
         return k;
     }
 
@@ -125,7 +144,7 @@ public:
     double stepTime (long long k) const { return static_cast<double> (k) + ((k & 1) ? swing * 0.5 : 0.0); }
 
 private:
-    void jumpTo (double position)
+    void jumpTo (double position, double late = 0.0)
     {
         if (gateOpen)          // a held note doesn't survive a jump: close it on the next tick
         {
@@ -133,7 +152,7 @@ private:
             gateOffAt = position;
         }
         pos = position;
-        nextIndex = firstStepFrom (position);
+        nextIndex = firstStepFrom (position, late);
         nextTime = stepTime (nextIndex);
     }
 

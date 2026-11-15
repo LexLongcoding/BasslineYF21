@@ -95,7 +95,7 @@ Control ranges, defaults and menu choices are read from `Source/Parameters.h`; s
 ### Tests
 - `Tests/voice_render_test.cpp` - DSP only, no JUCE: renders the voice through filter modes, waves and
   effects to WAV and checks levels. `g++ -std=c++17 -O2 -ISource Tests/voice_render_test.cpp`
-- `-DYF21_BUILD_TESTS=ON` builds `YF21Tests` (51 checks: trigger keys, stuck-note cases, panic, transpose, FREE mode slides,
+- `-DYF21_BUILD_TESTS=ON` builds `YF21Tests` (57 checks: trigger keys, stuck-note cases, panic, DAW loops, transpose, FREE mode slides,
   SYNC/RETRIG starts, host tempo, step + live record, 303 slide gating, CC learn, state round trip,
   every factory patch, editor screenshots) and `YF21HostTest` (loads the built .vst3 like a DAW).
 

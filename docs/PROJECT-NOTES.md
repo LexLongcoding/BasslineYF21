@@ -1,6 +1,6 @@
 # Bassline YF-21 - project notes (for contributors and for resuming work)
 
-Last updated: 2026-11-14, version 0.1.1. License: AGPL-3.0-or-later, copyright LexLongcoding.
+Last updated: 2026-11-14, version 0.1.2. License: AGPL-3.0-or-later, copyright LexLongcoding.
 Sister project: Decu6000 (drum machine) - same fonts, colours, knob drawing, LCD, patch system and MIDI learn.
 
 ## What it is
@@ -21,6 +21,11 @@ Name is a Macross Plus reference (owner's choice). References: Roland TB-303, Ko
   - Note-offs are routed by each note's role at note-on (Live / Trigger / Transpose), never by current state:
     fixes stuck drones reported by the owner (overlap into a slot key, mode change, DAW stop without note-offs).
     DAW play -> stop releases everything MIDI was holding. PANIC = release + stop + voice.reset().
+  - DAW loops (owner: step 1 skipped on repeat): host position arrives once per block, so a slot key re-sent at
+    a loop restart is often delivered at the next block's start, already past step 1. Sequencer::start/follow
+    take a `late` allowance (about one block, max 1/4 step): a step that began that recently still plays.
+    With loop points from the host, the sequencer wraps at the exact sample of the loop end; a jump by a whole
+    number of pattern lengths just shifts the clock (no skip, no double trigger).
   - Drag-out MIDI and transport free-run were offered and **not** wanted (for now).
   - The on-screen keyboard always plays the synth / records; it never triggers slots.
 - **Recording**: REC + stopped = step record at the cursor; REC + PLAY = live record, quantised to the
@@ -64,7 +69,7 @@ Name is a Macross Plus reference (owner's choice). References: Roland TB-303, Ko
 
 ## Testing
 - `Tests/voice_render_test.cpp` (no JUCE) - 26 renders / checks.
-- `YF21Tests` (`-DYF21_BUILD_TESTS=ON`) - 51 checks + editor screenshots; `YF21HostTest` loads the .vst3.
+- `YF21Tests` (`-DYF21_BUILD_TESTS=ON`) - 57 checks + editor screenshots; `YF21HostTest` loads the .vst3.
 - Headless Linux machines without ALSA / Xrandr headers: configure with `-DYF21_HEADLESS_TEST_BUILD=ON`
   and `CXXFLAGS="-DJUCE_USE_XRANDR=0 -DJUCE_USE_XINERAMA=0 -DJUCE_USE_XCURSOR=0 -DJUCE_USE_XRENDER=0"`
   (the flags reach JUCE's juceaide helper build too).

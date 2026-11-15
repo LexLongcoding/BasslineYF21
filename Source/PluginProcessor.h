@@ -109,7 +109,11 @@ private:
     void readVoiceSettings (VoiceSettings&);
     float pv (int index) const { return raw[static_cast<size_t> (index)]->load(); }
 
-    struct HostInfo { bool playing = false; double ppq = 0.0; double bpm = 120.0; bool hasBpm = false; };
+    struct HostInfo
+    {
+        bool playing = false, hasBpm = false, looping = false;
+        double ppq = 0.0, bpm = 120.0, loopStart = 0.0, loopEnd = 0.0;   // ppq = quarter notes
+    };
     void handleMidi (const juce::MidiMessage&, int sample, bool fromUi);
     void handleController (int cc, int value);
     void startSequencer (int slot, int sample, bool fromTrigger);
@@ -147,6 +151,7 @@ private:
     double sampleRateHz = 48000.0;
     HostInfo host;
     double blockStepsPerSample = 0.0, blockBeatsPerSample = 0.0;
+    double lateSteps = 0.0;          // how late a step may still play after a host jump (about one block)
 
     struct NoteStack
     {

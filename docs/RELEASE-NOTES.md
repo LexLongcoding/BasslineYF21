@@ -1,4 +1,12 @@
-## Bassline YF-21 v0.1.1
+## Bassline YF-21 v0.1.2
+
+- Fixed: when the DAW looped, step 1 of the pattern could be skipped on every repeat. This happened in DAWs that
+  deliver the slot key at a loop restart at the start of the next audio block, a few milliseconds after the bar.
+  A step that began up to one audio block earlier now still plays (a few ms late) instead of being skipped.
+- Fixed: the sequencer now wraps exactly at the DAW's loop end when the DAW reports its loop points, so the note
+  at the loop start isn't cut short or played twice.
+
+## v0.1.1
 
 - New: user manual (PDF, included in every download): installing, every control, the sequencer and its symbols,
   step and live recording, PATTERN and FREE modes in a DAW, tempo and sync, MIDI learn, patches and patterns,

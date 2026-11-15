@@ -22,14 +22,19 @@ namespace
 
     struct TestPlayHead : juce::AudioPlayHead
     {
-        bool playing = false;
-        double bpm = 120.0, ppq = 0.0;
+        bool playing = false, looping = false, reportLoop = true;
+        double bpm = 120.0, ppq = 0.0, loopStart = 0.0, loopEnd = 4.0;
         juce::Optional<PositionInfo> getPosition() const override
         {
             PositionInfo p;
             p.setIsPlaying (playing);
             p.setBpm (bpm);
             p.setPpqPosition (ppq);
+            if (looping && reportLoop)
+            {
+                p.setIsLooping (true);
+                p.setLoopPoints (LoopPoints { loopStart, loopEnd });
+            }
             return p;
         }
     };
@@ -57,7 +62,11 @@ namespace
             buf.clear();
             p.processBlock (buf, midi);
             for (int i = 0; i < block; ++i) out.push_back (buf.getSample (0, i));
-            if (ph != nullptr && ph->playing) ph->ppq += block / fs * ph->bpm / 60.0;
+            if (ph != nullptr && ph->playing)
+            {
+                ph->ppq += block / fs * ph->bpm / 60.0;
+                if (ph->looping && ph->ppq >= ph->loopEnd) ph->ppq -= ph->loopEnd - ph->loopStart;   // wraps mid-block
+            }
         }
         return out;
     }
@@ -360,6 +369,44 @@ int main (int argc, char** argv)
         ph.ppq = 0.0;                                        // loop back to the start
         auto x = render (*p, 0.5, {}, &ph);
         check (rms (x, 6000) < 0.002f, "DAW loop jump closes an open gate");
+        p->setPlayHead (nullptr);
+    }
+
+    // ---------------------------------------------------------------- DAW loop: step 1 must play every pass (bug report)
+    for (int variant = 0; variant < 6; ++variant)
+    {
+        // 0: DAW reports loop points, sends C0 off+on at the loop point   1: same, C0 held through
+        // 2: no loop points reported, C0 off+on                           3: no loop points, C0 held through
+        // 4/5: C0 off at the loop point, on at the start of the next audio block (DAWs that don't split
+        //      blocks at the loop) - with / without loop points
+        auto p = fresh();
+        TestPlayHead ph; ph.playing = true; ph.bpm = 120.0; ph.looping = true; ph.reportLoop = variant < 2 || variant == 4;
+        p->setPlayHead (&ph);
+        Pat::Pattern pat = Pat::Pattern::empty();
+        pat.steps[0] = {};                  // only step 1 plays
+        p->bank.store (0, pat);
+        setParam (*p, "amp_sustain", 1.0f);
+        setParam (*p, "seq_gate", 0.5f);
+        const juce::int64 bar = 96000;      // 1 bar at 120 BPM; 96000 / 512 blocks = loop point mid-block
+        std::vector<Ev> ev { { 0, juce::MidiMessage::noteOn (1, 24, 0.8f) } };
+        if (variant % 2 == 0 || variant >= 4)
+            for (int pass = 1; pass < 3; ++pass)
+            {
+                const juce::int64 on = variant >= 4 ? (bar * pass / block + 1) * block : bar * pass;
+                ev.push_back ({ bar * pass, juce::MidiMessage::noteOff (1, 24) });
+                ev.push_back ({ on, juce::MidiMessage::noteOn (1, 24, 0.8f) });
+            }
+        auto x = render (*p, 6.2, ev, &ph);
+        const char* names[] = { "loop points, key re-sent", "loop points, key held", "no loop points, key re-sent",
+                                "no loop points, key held", "loop points, key re-sent next block", "no loop points, key re-sent next block" };
+        bool ok = true;
+        for (int pass = 0; pass < 3; ++pass)
+        {
+            const auto from = static_cast<size_t> (bar * pass), mid = from + 1800;
+            ok = ok && rms (x, from, mid) > 0.05f;                         // step 1 sounds (within ~10 ms)
+            ok = ok && rms (x, from + 6000, from + 12000) < 0.01f;        // and nothing else
+        }
+        check (ok, juce::String ("DAW loop (") + names[variant] + "): step 1 plays on every pass");
         p->setPlayHead (nullptr);
     }
 
