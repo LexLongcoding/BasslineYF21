@@ -58,7 +58,7 @@ private:
     UiContext& ctx;
     std::optional<Pat::Pattern> clipboard;
     juce::String clipboardName;
-    int shownPlaying = -2, shownEdit = -2;
+    int shownPlaying = -2, shownEdit = -2, shownKeys = 0;
     bool shownTrig = false;
 };
 
@@ -106,7 +106,10 @@ private:
 
     UiContext& ctx;
     juce::TextButton playButton { "PLAY" }, recButton { "REC" };
-    ParamCombo mode, start, keys;
+    ParamCombo mode, start;
+    juce::ComboBox slotKey;                   // the selected slot's trigger key
+    juce::TextButton keyLearn { "LEARN" };
+    int shownKey = -1, shownKeySlot = -1, seenKeyLearns = 0;
     Knob swing, gate;
     MiniKeyboard keyboard;
     juce::TextButton kbDown { "-" }, kbUp { "+" }, accButton { "ACC" };

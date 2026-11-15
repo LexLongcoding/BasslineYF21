@@ -174,15 +174,15 @@ int main (int argc, char** argv)
     {
         auto p = fresh();
         setParam (*p, "seq_sync", 0.0f);
-        setParam (*p, "seq_trigbase", 0.0f);   // C-2
+        p->setSlotKeysFrom (0);   // C-2 .. D#-1
         auto x = render (*p, 1.0, { { 0, juce::MidiMessage::noteOn (1, 1, 0.8f) } });   // C#-2 = slot 2
-        check (p->getPlayingSlot() == 1, "TRIGGER KEYS from C-2: note 1 plays slot 2");
+        check (p->getPlayingSlot() == 1, "trigger keys from C-2: note 1 plays slot 2");
         check (p->isTriggeredByMidi(), "...reported as MIDI-triggered");
         auto q = fresh();
         setParam (*q, "seq_sync", 0.0f);
-        setParam (*q, "seq_trigbase", 17.0f);   // F-1: any note, not just octaves
+        q->setSlotKeysFrom (17);   // F-1: any note, not just octaves
         render (*q, 0.5, { { 0, juce::MidiMessage::noteOn (1, 17 + 15, 0.8f) } });
-        check (q->getPlayingSlot() == 15, "TRIGGER KEYS from F-1: note 32 plays slot 16");
+        check (q->getPlayingSlot() == 15, "trigger keys from F-1: note 32 plays slot 16");
         render (*q, 0.2, { { 0, juce::MidiMessage::noteOff (1, 32) }, { 10, juce::MidiMessage::noteOn (1, 16, 0.8f) } });
         check (q->getPlayingSlot() < 0, "...and E-1 (just below) is an ordinary note");
     }
@@ -446,21 +446,53 @@ int main (int argc, char** argv)
         check (rms (y, 6000) > 0.05f, "after PANIC, a slot key plays again");
     }
 
-    // ---------------------------------------------------------------- old TRIGGER KEYS setting is converted
+    // ---------------------------------------------------------------- per-slot trigger keys (owner's request)
+    {
+        auto p = fresh();
+        setParam (*p, "seq_sync", 0.0f);
+        p->setSlotKey (0, 36);                       // slot 1 -> C1
+        p->setSlotKey (1, 41);                       // slot 2 -> F1
+        check (p->getSlotKey (0) == 36 && p->getSlotKey (1) == 41, "slot keys: setting slot 2's key leaves slot 1's alone");
+        check (p->getSlotKey (12) == 24, "slot keys: a key another slot used is swapped (slot 13 got C0)");
+        render (*p, 0.3, { { 0, juce::MidiMessage::noteOn (1, 41, 0.8f) } });
+        check (p->getPlayingSlot() == 1, "slot keys: F1 plays slot 2");
+        render (*p, 0.3, { { 0, juce::MidiMessage::noteOff (1, 41) }, { 10, juce::MidiMessage::noteOn (1, 36, 0.8f) } });
+        check (p->getPlayingSlot() == 0, "slot keys: C1 plays slot 1");
+        render (*p, 0.1, { { 0, juce::MidiMessage::noteOff (1, 36) } });
+
+        // learn: the next note becomes slot 5's key and is not played
+        p->armKeyLearn (4);
+        auto x = render (*p, 0.3, { { 0, juce::MidiMessage::noteOn (1, 31, 0.8f) }, { 4000, juce::MidiMessage::noteOff (1, 31) } });
+        check (p->getSlotKey (4) == 31 && p->getArmedKeySlot() < 0 && p->getPlayingSlot() < 0 && rms (x) < 0.002f,
+               "slot key learn: G0 becomes slot 5's key without playing anything");
+        render (*p, 0.3, { { 0, juce::MidiMessage::noteOn (1, 31, 0.8f) } });
+        check (p->getPlayingSlot() == 4, "slot key learn: G0 now plays slot 5");
+
+        juce::MemoryBlock mb;
+        p->getStateInformation (mb);
+        auto q = fresh();
+        q->setStateInformation (mb.getData(), static_cast<int> (mb.getSize()));
+        check (q->getSlotKey (0) == 36 && q->getSlotKey (1) == 41 && q->getSlotKey (4) == 31, "slot keys saved with the project");
+    }
+
+    // ---------------------------------------------------------------- old trigger key settings are converted
+    for (int v = 0; v < 2; ++v)
     {
         auto p = fresh();
         juce::MemoryBlock mb;
         p->getStateInformation (mb);
         auto xml = juce::AudioProcessor::getXmlFromBinary (mb.getData(), static_cast<int> (mb.getSize()));
-        for (auto* e : xml->getChildIterator())
-            if (e->getStringAttribute ("id") == "seq_trigbase") { xml->removeChildElement (e, true); break; }
+        if (auto* extra = xml->getChildByName ("YF21Extra")) extra->removeAttribute ("slotKeys");
         auto* old = xml->createNewChildElement ("PARAM");
-        old->setAttribute ("id", "seq_trigoct"); old->setAttribute ("value", 1.0);   // old "C-1"
+        if (v == 0) { old->setAttribute ("id", "seq_trigoct");  old->setAttribute ("value", 1.0); }    // v0.1.0-0.1.1 "C-1"
+        else        { old->setAttribute ("id", "seq_trigbase"); old->setAttribute ("value", 17.0); }   // v0.1.2-0.1.3 "F-1"
         juce::MemoryBlock mb2;
         juce::AudioProcessor::copyXmlToBinary (*xml, mb2);
         auto q = fresh();
         q->setStateInformation (mb2.getData(), static_cast<int> (mb2.getSize()));
-        check (q->getTriggerBase() == 12, "old project with TRIGGER KEYS C-1 loads as start note C-1 (12)");
+        const int first = v == 0 ? 12 : 17;
+        check (q->getSlotKey (0) == first && q->getSlotKey (15) == first + 15,
+               juce::String ("old project (") + (v == 0 ? "trigger octave C-1" : "trigger start F-1") + ") converts to per-slot keys");
     }
 
     // ---------------------------------------------------------------- CC learn

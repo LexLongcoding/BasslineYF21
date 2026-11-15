@@ -127,8 +127,7 @@ namespace Params
         // FREE: a plain mono synth - every key plays (overlap = slide, velocity >= 100 = accent).
         { "seq_mode",   "Play Mode",      "MODE",  0, 1, 0, 0, U::Choice, "PATTERN|FREE", false },
         { "seq_start",  "Pattern Start",  "START", 0, 1, 0, 1, U::Choice, "RETRIG|SYNC", false },
-        // first of the 16 slot trigger keys, as a MIDI note (0 = C-2 ... 60 = C3; middle C = C3)
-        { "seq_trigbase","Trigger Keys Start", "KEYS", 0, 60, 0, 24, U::Note, nullptr, false },
+        // (each slot's trigger key is not a parameter: it's per-slot data saved with the project)
     };
 
     constexpr int numParams = static_cast<int> (sizeof (specs) / sizeof (specs[0]));

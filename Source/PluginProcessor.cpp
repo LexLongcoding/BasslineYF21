@@ -150,6 +150,7 @@ BasslineAudioProcessor::BasslineAudioProcessor()
     }
     for (auto& c : ccToParam)
         c.store (-1);
+    setSlotKeysFrom (24);   // C0 .. D#1
 
     for (int o = 0; o < 3; ++o)
     {
@@ -171,7 +172,6 @@ BasslineAudioProcessor::BasslineAudioProcessor()
     ix.volume = indexOf ("master_volume"); ix.tune = indexOf ("master_tune");
     ix.tempo = indexOf ("seq_tempo"); ix.sync = indexOf ("seq_sync"); ix.swing = indexOf ("seq_swing");
     ix.gate = indexOf ("seq_gate"); ix.mode = indexOf ("seq_mode"); ix.start = indexOf ("seq_start");
-    ix.trigBase = indexOf ("seq_trigbase");
 
     // A fresh instance starts with a few factory patterns in the bank so there's something to play.
     for (int s = 0; s < Pat::numSlots; ++s)
@@ -378,7 +378,6 @@ void BasslineAudioProcessor::handleMidi (const juce::MidiMessage& m, int sample,
     }
 
     auto& role = noteRole[static_cast<size_t> (note & 127)];
-    const int trigBase = juce::roundToInt (pv (ix.trigBase));   // slot 1's key; slots 2-16 are the keys above it
 
     if (! on)
     {
@@ -402,10 +401,10 @@ void BasslineAudioProcessor::handleMidi (const juce::MidiMessage& m, int sample,
                     transposeNotes.clear();
                     seq.setTranspose (0);
                 }
-                else if (seq.getSlot() != triggerNotes.top() - trigBase)
+                else if (const int top = slotForKey (triggerNotes.top()); top >= 0 && seq.getSlot() != top)
                 {
-                    seq.setSlot (triggerNotes.top() - trigBase);
-                    editSlot.store (triggerNotes.top() - trigBase);   // the editor shows what's playing
+                    seq.setSlot (top);
+                    editSlot.store (top);   // the editor shows what's playing
                 }
                 break;
             case Role::None:
@@ -418,11 +417,19 @@ void BasslineAudioProcessor::handleMidi (const juce::MidiMessage& m, int sample,
     if (role != Role::None)
         handleMidi (juce::MidiMessage::noteOff (m.getChannel(), note), sample, false);
 
+    // trigger key learn: this note becomes the armed slot's key and isn't played
+    if (const int learnSlot = keyLearnSlot.exchange (-1); learnSlot >= 0)
+    {
+        setSlotKey (learnSlot, note);
+        keyLearnCount.fetch_add (1);
+        return;
+    }
+
     const bool patternMode = pv (ix.mode) < 0.5f;
-    if (patternMode && note >= trigBase && note < trigBase + Pat::numSlots)
+    const int slot = patternMode ? slotForKey (note) : -1;
+    if (slot >= 0)
     {
         role = Role::Trigger;
-        const int slot = note - trigBase;
         triggerNotes.push (note);
         editSlot.store (slot);                    // the editor follows the slot the DAW plays
         const bool retrig = pv (ix.start) < 0.5f;
@@ -661,6 +668,34 @@ void BasslineAudioProcessor::shiftEditSlot (int direction)
 }
 
 //==============================================================================
+// Slot trigger keys
+void BasslineAudioProcessor::setSlotKey (int slot, int note)
+{
+    slot = juce::jlimit (0, Pat::numSlots - 1, slot);
+    note = juce::jlimit (0, 127, note);
+    const int old = getSlotKey (slot);
+    const int other = slotForKey (note);
+    if (other >= 0 && other != slot)
+        slotKeys[static_cast<size_t> (other)].store (old);   // swap: no two slots share a key
+    slotKeys[static_cast<size_t> (slot)].store (note);
+}
+
+void BasslineAudioProcessor::setSlotKeysFrom (int firstNote)
+{
+    firstNote = juce::jlimit (0, 127 - (Pat::numSlots - 1), firstNote);
+    for (int s = 0; s < Pat::numSlots; ++s)
+        slotKeys[static_cast<size_t> (s)].store (firstNote + s);
+}
+
+int BasslineAudioProcessor::slotForKey (int note) const
+{
+    for (int s = 0; s < Pat::numSlots; ++s)
+        if (slotKeys[static_cast<size_t> (s)].load() == note)
+            return s;
+    return -1;
+}
+
+//==============================================================================
 // CC learn
 void BasslineAudioProcessor::handleController (int cc, int value)
 {
@@ -734,6 +769,11 @@ void BasslineAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     auto state = apvts.copyState();
     juce::ValueTree extra ("YF21Extra");
     extra.setProperty ("ccMap", ccMapToString(), nullptr);
+    {
+        juce::StringArray keys;
+        for (int s = 0; s < Pat::numSlots; ++s) keys.add (juce::String (getSlotKey (s)));
+        extra.setProperty ("slotKeys", keys.joinIntoString (","), nullptr);
+    }
     extra.setProperty ("uiScale", uiScale, nullptr);
     extra.setProperty ("patchName", patches.getCurrentName(), nullptr);
     extra.setProperty ("patchModified", patches.isModified(), nullptr);
@@ -760,24 +800,25 @@ void BasslineAudioProcessor::setStateInformation (const void* data, int sizeInBy
     auto state = juce::ValueTree::fromXml (*xml);
     const auto extra = state.getChildWithName ("YF21Extra");
 
-    // v0.1.0-0.1.1 stored TRIGGER KEYS as an octave choice (0 = C-2, 1 = C-1, 2 = C0)
+    // Older versions had one setting for all trigger keys: v0.1.0-0.1.1 an octave choice
+    // (seq_trigoct: 0 = C-2, 1 = C-1, 2 = C0), v0.1.2-0.1.3 a start note (seq_trigbase).
+    setSlotKeysFrom (24);
     for (const auto& child : state)
-        if (child.getProperty ("id").toString() == "seq_trigoct")
-        {
-            const int oldChoice = juce::jlimit (0, 2, static_cast<int> (child.getProperty ("value")));
-            juce::ValueTree base ("PARAM");
-            base.setProperty ("id", "seq_trigbase", nullptr);
-            base.setProperty ("value", 12 * oldChoice, nullptr);
-            if (! state.getChildWithProperty ("id", "seq_trigbase").isValid())
-                state.appendChild (base, nullptr);
-            break;
-        }
+    {
+        const auto id = child.getProperty ("id").toString();
+        if (id == "seq_trigoct")  setSlotKeysFrom (12 * juce::jlimit (0, 2, static_cast<int> (child.getProperty ("value"))));
+        if (id == "seq_trigbase") setSlotKeysFrom (juce::jlimit (0, 112, juce::roundToInt (static_cast<double> (child.getProperty ("value")))));
+    }
     state.removeChild (extra, nullptr);
     apvts.replaceState (state);
 
     if (extra.isValid())
     {
         ccMapFromString (extra.getProperty ("ccMap").toString());
+        const auto keys = juce::StringArray::fromTokens (extra.getProperty ("slotKeys").toString(), ",", "");
+        if (keys.size() == Pat::numSlots)
+            for (int s = 0; s < Pat::numSlots; ++s)
+                slotKeys[static_cast<size_t> (s)].store (juce::jlimit (0, 127, keys[s].getIntValue()));
         uiScale = juce::jlimit (0.5f, 1.25f, static_cast<float> (extra.getProperty ("uiScale", 0.75f)));
         setEditSlot (static_cast<int> (extra.getProperty ("editSlot", 0)));
         int s = 0;

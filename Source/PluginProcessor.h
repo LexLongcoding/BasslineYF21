@@ -71,7 +71,15 @@ public:
 
     // PANIC: stops the sequencer and silences the voice at once, forgetting every held note.
     void panic()                    { playRequested.store (false); panicRequested.store (true); }
-    int  getTriggerBase() const     { return juce::roundToInt (raw[static_cast<size_t> (ix.trigBase)]->load()); }
+    // Each slot has its own trigger key (default C0 for slot 1 up to D#1 for slot 16).
+    int  getSlotKey (int slot) const { return slotKeys[static_cast<size_t> (juce::jlimit (0, Pat::numSlots - 1, slot))].load(); }
+    void setSlotKey (int slot, int note);       // a key another slot uses is swapped, so keys stay unique
+    void setSlotKeysFrom (int firstNote);       // slot 1 = firstNote, slots 2-16 on the keys above
+    int  slotForKey (int note) const;           // -1 if no slot uses it
+    // Trigger key learn: the next MIDI note received becomes the slot's key (and isn't played).
+    void armKeyLearn (int slot)      { keyLearnSlot.store (slot); }          // -1 cancels
+    int  getArmedKeySlot() const     { return keyLearnSlot.load(); }
+    int  getKeyLearnCount() const    { return keyLearnCount.load(); }
 
     // The on-screen keyboard: always plays the synth (and step/live records), never triggers slots.
     void uiNote (int note, float velocity);   // velocity 0 = note off
@@ -139,7 +147,7 @@ private:
         int fltMode, cutoff, reso, envMod, decay, accent, drive, keyTrack;
         int attack, ampDecay, sustain, release, slide;
         int foldAmount, foldSym, foldMix, distType, distDrive, distTone, distMix;
-        int volume, tune, tempo, sync, swing, gate, mode, start, trigBase;
+        int volume, tune, tempo, sync, swing, gate, mode, start;
     } ix {};
 
     // ---- audio thread state
@@ -194,6 +202,8 @@ private:
     std::atomic<float> displayBpm { 125.0f }, meter { 0.0f }, lfoNow { 0.0f };
 
     std::atomic<int> learnCcParam { -1 }, ccLearnCount { 0 }, lastLearnedCc { -1 };
+    std::array<std::atomic<int>, Pat::numSlots> slotKeys;
+    std::atomic<int> keyLearnSlot { -1 }, keyLearnCount { 0 };
     std::array<std::atomic<int>, numCcs> ccToParam;
 
     std::array<std::atomic<float>, scopeSize> scope {};

@@ -1,6 +1,6 @@
 # Bassline YF-21 - project notes (for contributors and for resuming work)
 
-Last updated: 2026-11-14, version 0.1.3. License: AGPL-3.0-or-later, copyright LexLongcoding.
+Last updated: 2026-11-14, version 0.1.4. License: AGPL-3.0-or-later, copyright LexLongcoding.
 Sister project: Decu6000 (drum machine) - same fonts, colours, knob drawing, LCD, patch system and MIDI learn.
 
 ## What it is
@@ -16,8 +16,10 @@ Name is a Macross Plus reference (owner's choice). References: Roland TB-303, Ko
     With no slot held, keys play the synth.
   - FREE mode (owner's request): plain mono synth, nothing triggers. Overlap = slide, velocity >= 100 = accent.
   - PATTERN START switch: SYNC (step under the DAW position) / RETRIG (step 1 on the next 16th).
-  - TRIGGER KEYS FROM (`seq_trigbase`): any MIDI note 0-60 (owner asked for semitone steps, not octaves).
-    Replaced `seq_trigoct` (C-2/C-1/C0); setStateInformation converts old projects.
+  - Per-slot trigger keys (v0.1.4, owner's request after a global "start note" confused him: setting a key for one
+    pattern moved all of them). `slotKeys[16]` in the processor, unique (assigning a used key swaps), key learn
+    consumes the next MIDI note, saved in YF21Extra/slotKeys. Not parameters. Old projects: `seq_trigoct`
+    (v0.1.0-0.1.1) and `seq_trigbase` (v0.1.2-0.1.3) are converted to chromatic keys from their start note.
   - Note-offs are routed by each note's role at note-on (Live / Trigger / Transpose), never by current state:
     fixes stuck drones reported by the owner (overlap into a slot key, mode change, DAW stop without note-offs).
     DAW play -> stop releases everything MIDI was holding. PANIC = release + stop + voice.reset().
@@ -70,7 +72,7 @@ Name is a Macross Plus reference (owner's choice). References: Roland TB-303, Ko
 
 ## Testing
 - `Tests/voice_render_test.cpp` (no JUCE) - 26 renders / checks.
-- `YF21Tests` (`-DYF21_BUILD_TESTS=ON`) - 61 checks + editor screenshots; `YF21HostTest` loads the .vst3.
+- `YF21Tests` (`-DYF21_BUILD_TESTS=ON`) - 69 checks + editor screenshots; `YF21HostTest` loads the .vst3.
 - Headless Linux machines without ALSA / Xrandr headers: configure with `-DYF21_HEADLESS_TEST_BUILD=ON`
   and `CXXFLAGS="-DJUCE_USE_XRANDR=0 -DJUCE_USE_XINERAMA=0 -DJUCE_USE_XCURSOR=0 -DJUCE_USE_XRENDER=0"`
   (the flags reach JUCE's juceaide helper build too).

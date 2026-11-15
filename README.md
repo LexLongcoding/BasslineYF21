@@ -35,7 +35,7 @@ slide-and-accent sequencer sound - with modern extras:
 ## Playing it from a DAW
 **PLAY MODE** (sequencer panel) decides what incoming MIDI notes do:
 
-| Mode | Low keys (TRIGGER KEYS, default C0-D#1) | Other keys |
+| Mode | Slot trigger keys (one per slot, default C0-D#1) | Other keys |
 |---|---|---|
 | **PATTERN** | Hold a key to play slot 1-16, locked to the DAW. Release (or stop the DAW) to stop. The grid shows the slot being played. | While a slot is held: transpose it relative to C3 (E3 = +4, A2 = -3). With no slot held: play the synth. |
 | **FREE** | Play the synth | Play the synth |
@@ -46,8 +46,8 @@ slides and accents too.
 
 - **PATTERN START**: SYNC plays the step under the DAW's position (always in time); RETRIG starts the
   slot from step 1 on the next 16th.
-- **TRIGGER KEYS FROM**: slot 1's key - any note from C-2 (MIDI 0, the lowest there is) to C3, default C0;
-  slots 2-16 are the keys above it. Move it down if you also want to play low bass notes in PATTERN mode.
+- **SLOT TRIGGER KEY**: every slot has its own key, shown on its slot button. Pick one for the selected slot, or
+  press LEARN and play it. Keys are unique (taking another slot's key swaps them) and saved with the project.
 - **PANIC** (header): all notes off - stops the sequencer and silences the synth immediately.
 - The **PLAY** button plays the selected slot inside the plugin (for auditioning and recording).
   With SYNC on and the DAW playing, it follows the DAW's position.
@@ -95,7 +95,7 @@ Control ranges, defaults and menu choices are read from `Source/Parameters.h`; s
 ### Tests
 - `Tests/voice_render_test.cpp` - DSP only, no JUCE: renders the voice through filter modes, waves and
   effects to WAV and checks levels. `g++ -std=c++17 -O2 -ISource Tests/voice_render_test.cpp`
-- `-DYF21_BUILD_TESTS=ON` builds `YF21Tests` (61 checks: trigger keys, slot switching, stuck-note cases, panic, DAW loops, transpose, FREE mode slides,
+- `-DYF21_BUILD_TESTS=ON` builds `YF21Tests` (69 checks: per-slot trigger keys, key learn, slot switching, stuck-note cases, panic, DAW loops, transpose, FREE mode slides,
   SYNC/RETRIG starts, host tempo, step + live record, 303 slide gating, CC learn, state round trip,
   every factory patch, editor screenshots) and `YF21HostTest` (loads the built .vst3 like a DAW).
 

@@ -9,10 +9,7 @@ namespace
 {
     const char* noteNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", "C" };
 
-    juce::String trigKeyName (int slot, int trigBase)
-    {
-        return juce::MidiMessage::getMidiNoteName (trigBase + slot, true, true, 3);
-    }
+    juce::String keyName (int note) { return juce::MidiMessage::getMidiNoteName (note, true, true, 3); }
 
     // row colours: rest dim, slide cyan, accent pink, octave orange
     juce::Colour rowColour (int kind)
@@ -386,20 +383,24 @@ void SlotStrip::paint (juce::Graphics& g)
         g.setColour (isPlaying ? cyan : orange.withAlpha (empty ? 0.35f : 0.8f));
         g.drawRoundedRectangle (r, 3.0f, isPlaying ? 2.0f : 1.0f);
         g.setColour (isEdit ? bg : (empty ? dim : text));
+        auto label = r.toNearestInt().reduced (5, 0);
         g.setFont (display (11.0f));
-        g.drawText (juce::String (s + 1), r.toNearestInt(), juce::Justification::centred);
+        g.drawText (juce::String (s + 1), label, juce::Justification::centredLeft);
+        g.setFont (mono (10.0f));
+        g.setColour ((isEdit ? bg : (empty ? dim : cyan)).withAlpha (ctx.proc.getArmedKeySlot() == s ? 0.4f : 1.0f));
+        g.drawText (ctx.proc.getArmedKeySlot() == s ? juce::String ("?") : keyName (ctx.proc.getSlotKey (s)),
+                    label, juce::Justification::centredRight);
     }
 }
 
 void SlotStrip::mouseMove (const juce::MouseEvent& e)
 {
     const int s = slotAt (e.x);
-    const int trigOct = ctx.proc.getTriggerBase();
     if (auto* tip = dynamic_cast<juce::SettableTooltipClient*> (getParentComponent()))
         juce::ignoreUnused (tip);
     if (ctx.setLcd)
         ctx.setLcd ("SLOT " + juce::String (s + 1) + "  //  " + ctx.proc.slotNames[static_cast<size_t> (s)]
-                    + "  //  TRIGGER KEY " + trigKeyName (s, trigOct), orange);
+                    + "  //  TRIGGER KEY " + keyName (ctx.proc.getSlotKey (s)), orange);
 }
 
 void SlotStrip::mouseDown (const juce::MouseEvent& e)
@@ -413,6 +414,9 @@ void SlotStrip::mouseDown (const juce::MouseEvent& e)
         m.addItem (1, "Copy");
         m.addItem (2, "Paste" + (clipboard ? " \"" + clipboardName + "\"" : juce::String()), clipboard.has_value());
         m.addItem (3, "Clear");
+        m.addSeparator();
+        m.addItem (4, "Learn trigger key (play a note)...");
+        m.addItem (5, "Reset all trigger keys (C0 - D#1)");
         m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (this),
                          [this, s, safe = juce::Component::SafePointer<SlotStrip> (this)] (int r)
                          {
@@ -430,6 +434,8 @@ void SlotStrip::mouseDown (const juce::MouseEvent& e)
                                  p.slotNames[static_cast<size_t> (s)] = "EMPTY";
                                  p.slotModified[static_cast<size_t> (s)] = false;
                              }
+                             if (r == 4) { p.setEditSlot (s); p.armKeyLearn (s); }
+                             if (r == 5) p.setSlotKeysFrom (24);
                              if (onSlotChanged) onSlotChanged();
                              repaint();
                          });
@@ -444,9 +450,11 @@ void SlotStrip::tick()
 {
     const int p = ctx.proc.getPlayingSlot(), ed = ctx.proc.getEditSlot();
     const bool trig = ctx.proc.isTriggeredByMidi();
-    if (p != shownPlaying || ed != shownEdit || trig != shownTrig)
+    int keysHash = ctx.proc.getArmedKeySlot();
+    for (int s = 0; s < Pat::numSlots; ++s) keysHash = keysHash * 31 + ctx.proc.getSlotKey (s);
+    if (p != shownPlaying || ed != shownEdit || trig != shownTrig || keysHash != shownKeys)
     {
-        shownPlaying = p; shownEdit = ed; shownTrig = trig;
+        shownPlaying = p; shownEdit = ed; shownTrig = trig; shownKeys = keysHash;
         repaint();
     }
 }
@@ -538,7 +546,7 @@ void MiniKeyboard::tick()
 //==============================================================================
 SequencerPanel::SequencerPanel (UiContext& c)
     : ctx (c),
-      mode (c, "seq_mode", orange), start (c, "seq_start", orange), keys (c, "seq_trigbase", orange),
+      mode (c, "seq_mode", orange), start (c, "seq_start", orange),
       swing (c, "seq_swing", orange), gate (c, "seq_gate", orange),
       keyboard (c), slots (c), grid (c)
 {
@@ -590,11 +598,39 @@ SequencerPanel::SequencerPanel (UiContext& c)
         p.setEditStep ((step + 1) % p.bank.length (slot));
     };
 
+    for (int n = 0; n < 128; ++n)
+        slotKey.addItem (keyName (n) + "  (" + juce::String (n) + ")", n + 1);
+    slotKey.setTooltip ("The MIDI key that plays the selected slot (PATTERN mode). "
+                        "Choosing a key another slot uses swaps the two.");
+    slotKey.onChange = [this]
+    {
+        const int id = slotKey.getSelectedId();
+        if (id <= 0) return;
+        auto& p = ctx.proc;
+        const int other = p.slotForKey (id - 1);
+        p.setSlotKey (p.getEditSlot(), id - 1);
+        shownKey = id - 1;
+        patternLcd.showMessage ("SLOT " + juce::String (p.getEditSlot() + 1) + " TRIGGER KEY  " + keyName (id - 1)
+                                + (other >= 0 && other != p.getEditSlot() ? "  (SWAPPED WITH SLOT " + juce::String (other + 1) + ")" : juce::String()),
+                                orange);
+    };
+    keyLearn.setClickingTogglesState (true);
+    keyLearn.setColour (juce::TextButton::buttonOnColourId, learn);
+    keyLearn.setTooltip ("Play a note on your controller or in the DAW: it becomes the selected slot's trigger key");
+    keyLearn.onClick = [this]
+    {
+        ctx.proc.armKeyLearn (keyLearn.getToggleState() ? ctx.proc.getEditSlot() : -1);
+        if (keyLearn.getToggleState())
+            patternLcd.showMessage ("PLAY A NOTE FOR SLOT " + juce::String (ctx.proc.getEditSlot() + 1) + "'S TRIGGER KEY", learn, -1);
+        else
+            patternLcd.clearMessage();
+    };
+    seenKeyLearns = ctx.proc.getKeyLearnCount();
     patternLcd.onClick = [this] { showPatternMenu(); };
     patternLcd.setMouseCursor (juce::MouseCursor::PointingHandCursor);
     slots.onSlotChanged = [this] { lastChange = ctx.proc.bank.getChangeCount(); updatePatternText(); };
 
-    for (juce::Component* comp : std::initializer_list<juce::Component*> { &playButton, &recButton, &mode, &start, &keys,
+    for (juce::Component* comp : std::initializer_list<juce::Component*> { &playButton, &recButton, &mode, &start, &slotKey, &keyLearn,
                                                                            &swing, &gate, &keyboard, &slots, &patternLcd, &grid })
         addAndMakeVisible (comp);
     lastChange = ctx.proc.bank.getChangeCount();
@@ -626,9 +662,11 @@ void SequencerPanel::resized()
     mode.setBounds (l.removeFromTop (24));
     l.removeFromTop (18);
     row = l.removeFromTop (24);
-    start.setBounds (row.removeFromLeft (121));
-    row.removeFromLeft (8);
-    keys.setBounds (row);
+    start.setBounds (row.removeFromLeft (96));
+    row.removeFromLeft (6);
+    keyLearn.setBounds (row.removeFromRight (50));
+    row.removeFromRight (4);
+    slotKey.setBounds (row);
     l.removeFromTop (4);
     auto kb = l.removeFromBottom (64);
     l.removeFromBottom (4);
@@ -678,7 +716,8 @@ void SequencerPanel::paint (juce::Graphics& g)
     g.setFont (mono (10.0f));
     g.drawText ("PLAY MODE", mode.getBounds().translated (0, -15).withHeight (14), juce::Justification::bottomLeft);
     g.drawText ("PATTERN START", start.getBounds().translated (0, -15).withHeight (14), juce::Justification::bottomLeft);
-    g.drawText ("TRIGGER KEYS FROM", keys.getBounds().translated (0, -15).withHeight (14), juce::Justification::bottomLeft);
+    g.drawText ("SLOT " + juce::String (ctx.proc.getEditSlot() + 1) + " TRIGGER KEY",
+                slotKey.getBounds().translated (0, -15).withHeight (14).withRight (keyLearn.getRight()), juce::Justification::bottomLeft);
     g.drawText ("KEYS OCT " + juce::String (keyboard.octave > 0 ? "+" : "") + juce::String (keyboard.octave),
                 kbLabelArea, juce::Justification::centred);
 
@@ -706,9 +745,7 @@ juce::String SequencerPanel::statusText() const
         return t;
     }
     if (free) return "FREE MODE // EVERY KEY PLAYS THE SYNTH";
-    const int trigOct = p.getTriggerBase();
-    return "PATTERN MODE // " + trigKeyName (0, trigOct) + "-" + trigKeyName (15, trigOct)
-           + " PLAY SLOTS 1-16, HIGHER KEYS TRANSPOSE";
+    return "PATTERN MODE // EACH SLOT'S TRIGGER KEY IS SHOWN ON ITS BUTTON, OTHER KEYS TRANSPOSE";
 }
 
 void SequencerPanel::updatePatternText()
@@ -741,6 +778,21 @@ void SequencerPanel::tick()
         repaint (statusArea);
         repaint (lenArea);
     }
+    // the selected slot's trigger key and key learn
+    const int key = p.getSlotKey (p.getEditSlot());
+    if (key != shownKey || p.getEditSlot() != shownKeySlot)
+    {
+        shownKey = key;
+        shownKeySlot = p.getEditSlot();
+        slotKey.setSelectedId (key + 1, juce::dontSendNotification);
+        repaint (slotKey.getBounds().translated (0, -16).withHeight (16).withRight (keyLearn.getRight()));
+    }
+    if (const int n = p.getKeyLearnCount(); n != seenKeyLearns)
+    {
+        seenKeyLearns = n;
+        patternLcd.showMessage ("SLOT " + juce::String (p.getEditSlot() + 1) + " TRIGGER KEY  <-  " + keyName (key), learn);
+    }
+    keyLearn.setToggleState (p.getArmedKeySlot() >= 0, juce::dontSendNotification);
     slots.tick();
     grid.tick();
     keyboard.tick();

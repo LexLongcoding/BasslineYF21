@@ -511,7 +511,7 @@ story += [P("11  Using it in a DAW", "h1"),
             "patterns into MIDI, Bassline YF-21 lets your DAW <b>play its patterns</b>. <b>PLAY MODE</b> chooses how "
             "incoming MIDI notes are used."),
           table([["PLAY MODE", "TRIGGER KEYS", "OTHER KEYS"],
-                 ["<b>PATTERN</b>", f"Hold a key ({first} to {last} by default) to play slot 1-16. Release it to stop.",
+                 ["<b>PATTERN</b>", f"Each slot has its own key ({first} to {last} by default). Hold it to play the slot; release to stop.",
                   "While a slot is held: <b>transpose</b> the pattern. With no slot held: play the synth."],
                  ["<b>FREE</b>", "Play the synth like any other key.", "Play the synth."]],
                 [1.0 * inch, 2.75 * inch, 2.75 * inch], accent=ORANGE)]
@@ -531,14 +531,17 @@ story += bullets([
     "even if a slot key started in the meantime. When the DAW stops, any slot started by a trigger key stops too.",
 ])
 story += [P("Trigger keys", "h3"),
-          P("<b>TRIGGER KEYS FROM</b> sets slot 1's key: any note from C-2 to C3, one semitone at a time. Slots 2-16 "
-            "are the 15 keys above it. Some examples:"),
-          table([["TRIGGER KEYS FROM", "SLOT 1", "SLOT 16", "WHEN TO USE IT"],
-                 ["<b>C0</b> (default)", "C0 (24)", "D#1 (39)", "Easy to find in most piano rolls."],
-                 ["<b>C-1</b>", "C-1 (12)", "D#0 (27)", "Frees C1-D#1 for playing low bass notes in PATTERN mode."],
-                 ["<b>C-2</b>", "C-2 (0)", "D#-1 (15)", "The lowest notes MIDI has (note 0 is the bottom) - fully out of the way."],
-                 ["<b>F-1</b>", "F-1 (17)", "G#0 (32)", "Any start note works, not just Cs."]],
-                [1.35 * inch, 0.85 * inch, 0.85 * inch, 3.45 * inch]),
+          P("<b>Every slot has its own trigger key</b>, shown in cyan on its slot button (slot 1 = C0 up to slot 16 = D#1 "
+            "at first). To change one:"),
+          ] + bullets([
+    "Click the slot, then pick a key in <b>SLOT n TRIGGER KEY</b> (any MIDI note, C-2 to G8) - or press "
+    "<b>LEARN</b> and play the key on your controller (or let the DAW play it). The learned note is not played.",
+    "Right-click a slot button for <b>Learn trigger key</b> and <b>Reset all trigger keys (C0 - D#1)</b>.",
+    "Keys are unique: giving a slot a key another slot uses swaps the two slots' keys.",
+    "Changing one slot's key never changes the others. Keys are saved with your project.",
+]) + [
+          P("Tip: the lowest MIDI notes (C-2 = note 0 upward) are outside any musical range, so slot keys there never clash "
+            "with bass notes you play in PATTERN mode.", "body"),
           P("Note names use middle C = C3 (MIDI 60), like Ableton, Akai and FL Studio. If your DAW calls middle C \"C4\", "
             "its names are one octave higher - the note numbers are what count.", "cap")]
 story += [P("Pattern start: SYNC or RETRIG", "h3")]
@@ -557,7 +560,7 @@ story += bullets([
     "<b>Velocity 100 or more is an accent.</b>",
 ])
 story += [Spacer(1, 4),
-          note("PATTERN mode with no slot held behaves the same way for keys outside the trigger range, so you can mix "
+          note("PATTERN mode with no slot held behaves the same way for keys that aren't slot keys, so you can mix "
                "pattern sections and hand-played sections on one track. PLAY MODE is saved with the project and can be "
                "automated or MIDI-learned.", CYAN),
           PageBreak()]
@@ -677,7 +680,8 @@ story += [P("15  Sound design tips", "h1"),
 trouble = [
     ("A note hangs / drones", "Press <b>PANIC</b> in the header. (MIDI \"all notes off\" from your DAW or controller does the same.)"),
     ("Pressing a low key starts a pattern instead of a note",
-     "PATTERN mode: that key is a trigger key. Switch PLAY MODE to FREE, or move TRIGGER KEYS FROM lower (e.g. C-2)."),
+     "PATTERN mode: that key is a slot's trigger key (shown on the slot buttons). Switch PLAY MODE to FREE, or give "
+     "that slot a different key (e.g. down around C-2)."),
     ("Keys don't make sound while a pattern plays from the DAW",
      "In PATTERN mode, keys transpose the pattern while a slot key is held. Use FREE mode or a second instance to play on top."),
     ("Pattern plays out of time / starts in the middle",
@@ -685,8 +689,10 @@ trouble = [
     ("The pattern doesn't follow the DAW tempo", "Switch SYNC on (header)."),
     ("Nothing happens when I press PLAY in a DAW",
      "Check the track is armed / monitoring so you can hear the instrument, and that MASTER VOLUME isn't down."),
-    ("A trigger key plays nothing", "That slot is empty (slots 9-16 start empty). The grid shows the slot when its key "
-     "is played - fill it, or load a pattern into it from the pattern LCD."),
+    ("A trigger key plays nothing", "That slot is empty (slots 9-16 start empty), or the key isn't any slot's key - check "
+     "the keys on the slot buttons. The grid shows the slot when its key is played."),
+    ("Changing a slot's key changed another slot", "Keys are unique, so the other slot that had that key gets the "
+     "old key (a swap). Pick its key again if you want it elsewhere."),
     ("Recording doesn't change anything",
      "Recording goes into the selected (orange) slot. In live record, notes go to the nearest step of that slot."),
     ("No sound from the Standalone",

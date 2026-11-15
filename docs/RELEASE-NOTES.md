@@ -1,4 +1,12 @@
-## Bassline YF-21 v0.1.3
+## Bassline YF-21 v0.1.4
+
+- Changed: every pattern slot now has its **own trigger key**. Before, one setting (TRIGGER KEYS FROM) moved all 16
+  keys together, so setting a key for one pattern changed the others. Now: select a slot and pick its key in
+  SLOT TRIGGER KEY, or press LEARN and play the key. Keys show on the slot buttons, stay unique (taking another
+  slot's key swaps them) and are saved with the project. Older projects keep their keys.
+- Right-click a slot button: Learn trigger key, Reset all trigger keys (C0 - D#1).
+
+## v0.1.3
 
 - The sequencer grid now follows the trigger keys: when a key plays a slot, that slot is shown (and its steps light
   up), so switching patterns from the DAW is visible. Before, the grid stayed on the last slot you clicked.
