@@ -149,6 +149,7 @@ def fmt(v, s):
     if u == "Swing":     return f"{round(50 + v * 25)}%"
     if u == "Toggle":    return "ON" if v >= 0.5 else "OFF"
     if u == "Choice":    return s["choices"][int(v)]
+    if u == "Note":      return f"{trig_name(int(v))} ({int(v)})"
     return f"{v:g}"
 
 def rng(s):
@@ -302,6 +303,8 @@ story += bullets([
     f"<b>Patch LCD</b> - the current sound, e.g. {M('PATCH 02 // CLASSIC ACID')}. A {M('*')} means you changed "
     "it since loading. While you turn a knob it shows the value. Click it for the patch menu; the arrows step "
     "through patches.",
+    "<b>PANIC</b> - all notes off: stops the sequencer (and PLAY) and silences the synth immediately. Use it if "
+    "a note ever hangs.",
     "<b>MIDI LEARN</b> - assign controller knobs to the plugin's controls (section 13).",
 ])
 story += [P("Handy everywhere", "h2")]
@@ -520,13 +523,18 @@ story += bullets([
     "pattern: E3 = up 4 semitones, A2 = down 3, C4 = up an octave. When the transpose note ends, the pattern returns "
     "to its written key.",
     "The status line shows what's happening, e.g. " + M("PLAYING SLOT 2 (MIDI KEY)  TRANSPOSE +5") + ".",
+    "Each note's end undoes exactly what its start did: a note that began as a synth note always releases the synth, "
+    "even if a slot key started in the meantime. When the DAW stops, any slot started by a trigger key stops too.",
 ])
 story += [P("Trigger keys", "h3"),
-          table([["TRIGGER KEYS", "SLOT 1", "SLOT 16", "WHEN TO USE IT"],
+          P("<b>TRIGGER KEYS FROM</b> sets slot 1's key: any note from C-2 to C3, one semitone at a time. Slots 2-16 "
+            "are the 15 keys above it. Some examples:"),
+          table([["TRIGGER KEYS FROM", "SLOT 1", "SLOT 16", "WHEN TO USE IT"],
                  ["<b>C0</b> (default)", "C0 (24)", "D#1 (39)", "Easy to find in most piano rolls."],
                  ["<b>C-1</b>", "C-1 (12)", "D#0 (27)", "Frees C1-D#1 for playing low bass notes in PATTERN mode."],
-                 ["<b>C-2</b>", "C-2 (0)", "D#-1 (15)", "Keeps the triggers out of the musical range completely."]],
-                [1.2 * inch, 0.9 * inch, 0.9 * inch, 3.5 * inch]),
+                 ["<b>C-2</b>", "C-2 (0)", "D#-1 (15)", "The lowest notes MIDI has (note 0 is the bottom) - fully out of the way."],
+                 ["<b>F-1</b>", "F-1 (17)", "G#0 (32)", "Any start note works, not just Cs."]],
+                [1.35 * inch, 0.85 * inch, 0.85 * inch, 3.45 * inch]),
           P("Note names use middle C = C3 (MIDI 60), like Ableton, Akai and FL Studio. If your DAW calls middle C \"C4\", "
             "its names are one octave higher - the note numbers are what count.", "cap")]
 story += [P("Pattern start: SYNC or RETRIG", "h3")]
@@ -663,8 +671,9 @@ story += [P("15  Sound design tips", "h1"),
 
 # 16 troubleshooting
 trouble = [
+    ("A note hangs / drones", "Press <b>PANIC</b> in the header. (MIDI \"all notes off\" from your DAW or controller does the same.)"),
     ("Pressing a low key starts a pattern instead of a note",
-     "PATTERN mode: that key is a trigger key. Switch PLAY MODE to FREE, or move TRIGGER KEYS down to C-1 or C-2."),
+     "PATTERN mode: that key is a trigger key. Switch PLAY MODE to FREE, or move TRIGGER KEYS FROM lower (e.g. C-2)."),
     ("Keys don't make sound while a pattern plays from the DAW",
      "In PATTERN mode, keys transpose the pattern while a slot key is held. Use FREE mode or a second instance to play on top."),
     ("Pattern plays out of time / starts in the middle",

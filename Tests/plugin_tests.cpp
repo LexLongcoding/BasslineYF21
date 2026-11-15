@@ -165,10 +165,17 @@ int main (int argc, char** argv)
     {
         auto p = fresh();
         setParam (*p, "seq_sync", 0.0f);
-        setParam (*p, "seq_trigoct", 0.0f);   // C-2
+        setParam (*p, "seq_trigbase", 0.0f);   // C-2
         auto x = render (*p, 1.0, { { 0, juce::MidiMessage::noteOn (1, 1, 0.8f) } });   // C#-2 = slot 2
-        check (p->getPlayingSlot() == 1, "TRIGGER KEYS C-2: note 1 plays slot 2");
+        check (p->getPlayingSlot() == 1, "TRIGGER KEYS from C-2: note 1 plays slot 2");
         check (p->isTriggeredByMidi(), "...reported as MIDI-triggered");
+        auto q = fresh();
+        setParam (*q, "seq_sync", 0.0f);
+        setParam (*q, "seq_trigbase", 17.0f);   // F-1: any note, not just octaves
+        render (*q, 0.5, { { 0, juce::MidiMessage::noteOn (1, 17 + 15, 0.8f) } });
+        check (q->getPlayingSlot() == 15, "TRIGGER KEYS from F-1: note 32 plays slot 16");
+        render (*q, 0.2, { { 0, juce::MidiMessage::noteOff (1, 32) }, { 10, juce::MidiMessage::noteOn (1, 16, 0.8f) } });
+        check (q->getPlayingSlot() < 0, "...and E-1 (just below) is an ordinary note");
     }
 
     // ---------------------------------------------------------------- transpose while a slot is held
@@ -300,6 +307,92 @@ int main (int argc, char** argv)
         // at the end of step 1 (gate 50%), a non-slide note would be off; with slide it keeps sounding
         check (rms (x, 4500, 6000) > 0.05f, "slide step holds its gate into the next step");
         check (rms (x, 6000 + 3500, 12000) < rms (x, 6000, 8000) * 0.5f, "step after the slide closes at its own gate length");
+    }
+
+    // ---------------------------------------------------------------- stuck notes (bug report 2026-11-14)
+    {
+        // a higher note starts just before the slot key and ends while the slot is held
+        auto p = fresh();
+        setParam (*p, "seq_sync", 0.0f);
+        setParam (*p, "amp_sustain", 1.0f);
+        auto x = render (*p, 3.0, { { 0,     juce::MidiMessage::noteOn (1, 48, 0.8f) },      // plays the synth
+                                    { 200,   juce::MidiMessage::noteOn (1, 24, 0.8f) },      // slot 1 starts
+                                    { 24000, juce::MidiMessage::noteOff (1, 48) },           // ends while slot held
+                                    { 96000, juce::MidiMessage::noteOff (1, 24) } });        // slot ends at 2 s
+        check (rms (x, static_cast<size_t> (2.3 * fs)) < 0.002f, "no drone: note that began before the slot key is released");
+        auto y = render (*p, 1.0, { { 0, juce::MidiMessage::noteOn (1, 24, 0.8f) } });
+        check (rms (y, 12000) > 0.05f, "...and the next slot key still plays the pattern");
+    }
+    {
+        // a note pressed in FREE mode is released after switching to PATTERN mode
+        auto p = fresh();
+        setParam (*p, "seq_mode", 1.0f);
+        setParam (*p, "amp_sustain", 1.0f);
+        render (*p, 0.3, { { 0, juce::MidiMessage::noteOn (1, 24, 0.8f) } });
+        setParam (*p, "seq_mode", 0.0f);
+        auto x = render (*p, 1.0, { { 0, juce::MidiMessage::noteOff (1, 24) } });
+        check (rms (x, 12000) < 0.002f && p->getPlayingSlot() < 0, "no drone: note-off after a PLAY MODE change releases the note");
+    }
+    {
+        // the DAW stops without sending a note-off for the slot key
+        auto p = fresh();
+        TestPlayHead ph; ph.playing = true; ph.bpm = 120.0;
+        p->setPlayHead (&ph);
+        setParam (*p, "amp_sustain", 1.0f);
+        render (*p, 1.0, { { 0, juce::MidiMessage::noteOn (1, 24, 0.8f) } }, &ph);
+        ph.playing = false;
+        auto x = render (*p, 1.0, {}, &ph);
+        check (p->getPlayingSlot() < 0, "DAW stop ends a slot held by a trigger key");
+        check (rms (x, 12000) < 0.002f, "...and the voice is released");
+        p->setPlayHead (nullptr);
+    }
+    {
+        // the DAW loops back while a long gate is open: the gate closes instead of holding until the old position
+        auto p = fresh();
+        TestPlayHead ph; ph.playing = true; ph.bpm = 120.0; ph.ppq = 3.5;   // step 15 of bar 1
+        p->setPlayHead (&ph);
+        Pat::Pattern pat = Pat::Pattern::empty();
+        pat.steps[14] = {};                                  // only step 15 plays
+        p->bank.store (0, pat);
+        setParam (*p, "seq_gate", 1.0f);
+        setParam (*p, "amp_sustain", 1.0f);
+        render (*p, 0.06, { { 0, juce::MidiMessage::noteOn (1, 24, 0.8f) } }, &ph);
+        ph.ppq = 0.0;                                        // loop back to the start
+        auto x = render (*p, 0.5, {}, &ph);
+        check (rms (x, 6000) < 0.002f, "DAW loop jump closes an open gate");
+        p->setPlayHead (nullptr);
+    }
+
+    // ---------------------------------------------------------------- panic
+    {
+        auto p = fresh();
+        setParam (*p, "seq_sync", 0.0f);
+        setParam (*p, "amp_sustain", 1.0f); setParam (*p, "amp_release", 2.0f);
+        p->setPlay (true);
+        render (*p, 0.5, { { 0, juce::MidiMessage::noteOn (1, 48, 0.8f) }, { 100, juce::MidiMessage::noteOn (1, 24, 0.8f) } });
+        p->panic();
+        auto x = render (*p, 0.3);
+        check (rms (x, 600) < 1.0e-4f, "PANIC: silent at once, even with a 2 s release");
+        check (! p->isSeqRunning() && ! p->isPlayRequested(), "PANIC: sequencer stopped, PLAY off");
+        auto y = render (*p, 0.5, { { 0, juce::MidiMessage::noteOn (1, 24, 0.8f) } });
+        check (rms (y, 6000) > 0.05f, "after PANIC, a slot key plays again");
+    }
+
+    // ---------------------------------------------------------------- old TRIGGER KEYS setting is converted
+    {
+        auto p = fresh();
+        juce::MemoryBlock mb;
+        p->getStateInformation (mb);
+        auto xml = juce::AudioProcessor::getXmlFromBinary (mb.getData(), static_cast<int> (mb.getSize()));
+        for (auto* e : xml->getChildIterator())
+            if (e->getStringAttribute ("id") == "seq_trigbase") { xml->removeChildElement (e, true); break; }
+        auto* old = xml->createNewChildElement ("PARAM");
+        old->setAttribute ("id", "seq_trigoct"); old->setAttribute ("value", 1.0);   // old "C-1"
+        juce::MemoryBlock mb2;
+        juce::AudioProcessor::copyXmlToBinary (*xml, mb2);
+        auto q = fresh();
+        q->setStateInformation (mb2.getData(), static_cast<int> (mb2.getSize()));
+        check (q->getTriggerBase() == 12, "old project with TRIGGER KEYS C-1 loads as start note C-1 (12)");
     }
 
     // ---------------------------------------------------------------- CC learn

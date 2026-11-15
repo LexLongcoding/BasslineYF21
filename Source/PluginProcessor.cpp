@@ -66,6 +66,22 @@ namespace
                 return a.withLabel ("%")
                     .withStringFromValueFunction ([] (float v, int) { return juce::String (juce::roundToInt (50.0f + v * 25.0f)) + "%"; })
                     .withValueFromStringFunction ([] (const juce::String& t) { return (t.getFloatValue() - 50.0f) / 25.0f; });
+            case U::Note:    // MIDI note number shown as a name, middle C = C3
+                return a.withStringFromValueFunction ([] (float v, int)
+                    { const int n = juce::roundToInt (v); return juce::MidiMessage::getMidiNoteName (n, true, true, 3) + " (" + juce::String (n) + ")"; })
+                    .withValueFromStringFunction ([] (const juce::String& t)
+                    {
+                        if (t.containsAnyOf ("ABCDEFGabcdefg"))
+                        {
+                            static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+                            const auto u = t.trim().toUpperCase();
+                            int best = -1, bestLen = 0;
+                            for (int i = 0; i < 12; ++i)
+                                if (u.startsWith (names[i]) && static_cast<int> (std::strlen (names[i])) > bestLen) { best = i; bestLen = static_cast<int> (std::strlen (names[i])); }
+                            if (best >= 0) return static_cast<float> (best + 12 * (u.substring (bestLen).getIntValue() + 2));
+                        }
+                        return t.getFloatValue();
+                    });
             case U::Integer:
                 return a.withStringFromValueFunction ([] (float v, int) { return juce::String (juce::roundToInt (v)); })
                     .withValueFromStringFunction (number);
@@ -107,7 +123,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout BasslineAudioProcessor::crea
             juce::NormalisableRange<float> range (s.min, s.max);
             if (s.centre > 0.0f)
                 range.setSkewForCentre (s.centre);
-            if (s.unit == U::Integer || s.unit == U::Octave || (s.unit == U::Semitones && s.min < 0.0f))
+            if (s.unit == U::Integer || s.unit == U::Octave || s.unit == U::Note || (s.unit == U::Semitones && s.min < 0.0f))
                 range.interval = 1.0f;
             layout.add (std::make_unique<juce::AudioParameterFloat> (pid, s.name, range, s.def, attributesFor (s.unit)));
         }
@@ -155,7 +171,7 @@ BasslineAudioProcessor::BasslineAudioProcessor()
     ix.volume = indexOf ("master_volume"); ix.tune = indexOf ("master_tune");
     ix.tempo = indexOf ("seq_tempo"); ix.sync = indexOf ("seq_sync"); ix.swing = indexOf ("seq_swing");
     ix.gate = indexOf ("seq_gate"); ix.mode = indexOf ("seq_mode"); ix.start = indexOf ("seq_start");
-    ix.trigOct = indexOf ("seq_trigoct");
+    ix.trigBase = indexOf ("seq_trigbase");
 
     // A fresh instance starts with a few factory patterns in the bank so there's something to play.
     for (int s = 0; s < Pat::numSlots; ++s)
@@ -188,6 +204,8 @@ void BasslineAudioProcessor::prepareToPlay (double sampleRate, int)
     voice.prepare (sampleRate, osFactor);
     seq.stop();
     liveNotes.clear(); triggerNotes.clear(); transposeNotes.clear();
+    noteRole.fill (Role::None);
+    hostWasPlaying = false;
     seqOwnsVoice = seqFromTrigger = false;
 }
 
@@ -256,8 +274,16 @@ void BasslineAudioProcessor::stopSequencer()
 
 void BasslineAudioProcessor::allNotesOff()
 {
+    releaseEverything();
+}
+
+// All notes off, the DAW stopping, or a reset: every MIDI-held note is let go.
+void BasslineAudioProcessor::releaseEverything()
+{
     liveNotes.clear(); triggerNotes.clear(); transposeNotes.clear();
+    noteRole.fill (Role::None);
     seq.setTranspose (0);
+    lastRecordedStep = -1;
     if (seqFromTrigger) stopSequencer();
     voice.noteOff();
 }
@@ -337,45 +363,76 @@ void BasslineAudioProcessor::handleMidi (const juce::MidiMessage& m, int sample,
 
     const int note = m.getNoteNumber();
     const bool on = m.isNoteOn();
-    const bool patternMode = pv (ix.mode) < 0.5f;
-    const int trigBase = 24 - 12 * (2 - static_cast<int> (pv (ix.trigOct)));   // C0 = 24, C-1 = 12, C-2 = 0
 
-    if (! fromUi && patternMode && note >= trigBase && note < trigBase + Pat::numSlots)
+    if (fromUi)   // on-screen keyboard: always plays the synth
     {
-        const int slot = note - trigBase;
-        if (on)
+        if (on) livePlay (note, m.getFloatVelocity()); else liveRelease (note);
+        return;
+    }
+
+    auto& role = noteRole[static_cast<size_t> (note & 127)];
+    const int trigBase = juce::roundToInt (pv (ix.trigBase));   // slot 1's key; slots 2-16 are the keys above it
+
+    if (! on)
+    {
+        // undo whatever this note did when it started
+        const auto r = role;
+        role = Role::None;
+        switch (r)
         {
-            triggerNotes.push (note);
-            const bool retrig = pv (ix.start) < 0.5f;
-            if (seq.isRunning() && seqFromTrigger && ! retrig)
-                seq.setSlot (slot);                   // SYNC: switch slot without losing the bar position
-            else
-                startSequencer (slot, sample, true);
-        }
-        else if (triggerNotes.remove (note))
-        {
-            if (triggerNotes.count == 0)
-            {
-                stopSequencer();
-                transposeNotes.clear();
-                seq.setTranspose (0);
-            }
-            else if (seq.getSlot() != triggerNotes.top() - trigBase)
-                seq.setSlot (triggerNotes.top() - trigBase);
+            case Role::Live:      liveRelease (note); break;
+            case Role::Transpose:
+                transposeNotes.remove (note);
+                seq.setTranspose (transposeNotes.count > 0 ? transposeNotes.top() - 60 : 0);
+                break;
+            case Role::Trigger:
+                if (! triggerNotes.remove (note)) break;
+                if (triggerNotes.count == 0)
+                {
+                    stopSequencer();
+                    for (int i = 0; i < transposeNotes.count; ++i)
+                        noteRole[static_cast<size_t> (transposeNotes.notes[static_cast<size_t> (i)] & 127)] = Role::None;
+                    transposeNotes.clear();
+                    seq.setTranspose (0);
+                }
+                else if (seq.getSlot() != triggerNotes.top() - trigBase)
+                    seq.setSlot (triggerNotes.top() - trigBase);
+                break;
+            case Role::None:
+            default: break;
         }
         return;
     }
 
-    if (! fromUi && patternMode && triggerNotes.count > 0)
+    // a repeated note-on without a note-off in between: finish the old one first
+    if (role != Role::None)
+        handleMidi (juce::MidiMessage::noteOff (m.getChannel(), note), sample, false);
+
+    const bool patternMode = pv (ix.mode) < 0.5f;
+    if (patternMode && note >= trigBase && note < trigBase + Pat::numSlots)
+    {
+        role = Role::Trigger;
+        const int slot = note - trigBase;
+        triggerNotes.push (note);
+        const bool retrig = pv (ix.start) < 0.5f;
+        if (seq.isRunning() && seqFromTrigger && ! retrig)
+            seq.setSlot (slot);                   // SYNC: switch slot without losing the bar position
+        else
+            startSequencer (slot, sample, true);
+        return;
+    }
+
+    if (patternMode && triggerNotes.count > 0)
     {
         // while a slot is held, other keys transpose it (relative to C3)
-        if (on) transposeNotes.push (note); else transposeNotes.remove (note);
-        seq.setTranspose (transposeNotes.count > 0 ? transposeNotes.top() - 60 : 0);
+        role = Role::Transpose;
+        transposeNotes.push (note);
+        seq.setTranspose (transposeNotes.top() - 60);
         return;
     }
 
-    if (on) livePlay (note, m.getFloatVelocity());
-    else    liveRelease (note);
+    role = Role::Live;
+    livePlay (note, m.getFloatVelocity());
 }
 
 void BasslineAudioProcessor::uiNote (int note, float velocity)
@@ -392,13 +449,27 @@ void BasslineAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
     // ---- host
     host = {};
+    bool hostPlayingNow = false;
     if (auto* ph = getPlayHead())
         if (auto pos = ph->getPosition())
         {
             host.playing = pos->getIsPlaying();
+            hostPlayingNow = host.playing;
             if (auto b = pos->getBpm()) { host.bpm = *b; host.hasBpm = *b > 1.0; }
             if (auto q = pos->getPpqPosition()) host.ppq = *q; else host.playing = false;
         }
+    if (panicRequested.exchange (false))
+    {
+        releaseEverything();
+        stopSequencer();
+        voice.reset();            // silent now, not after the release
+    }
+
+    // The DAW stopped: end anything its notes were holding (not every DAW sends note-offs on stop).
+    if (hostWasPlaying && ! hostPlayingNow)
+        releaseEverything();
+    hostWasPlaying = hostPlayingNow;
+
     const bool sync = pv (ix.sync) >= 0.5f && host.hasBpm;
     const double bpm = sync ? host.bpm : static_cast<double> (pv (ix.tempo));
     if (! sync) host.playing = false;        // not following the host: run on our own clock
@@ -663,6 +734,19 @@ void BasslineAudioProcessor::setStateInformation (const void* data, int sizeInBy
         return;
     auto state = juce::ValueTree::fromXml (*xml);
     const auto extra = state.getChildWithName ("YF21Extra");
+
+    // v0.1.0-0.1.1 stored TRIGGER KEYS as an octave choice (0 = C-2, 1 = C-1, 2 = C0)
+    for (const auto& child : state)
+        if (child.getProperty ("id").toString() == "seq_trigoct")
+        {
+            const int oldChoice = juce::jlimit (0, 2, static_cast<int> (child.getProperty ("value")));
+            juce::ValueTree base ("PARAM");
+            base.setProperty ("id", "seq_trigbase", nullptr);
+            base.setProperty ("value", 12 * oldChoice, nullptr);
+            if (! state.getChildWithProperty ("id", "seq_trigbase").isValid())
+                state.appendChild (base, nullptr);
+            break;
+        }
     state.removeChild (extra, nullptr);
     apvts.replaceState (state);
 

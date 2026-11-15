@@ -53,7 +53,7 @@ private:
     ParamToggle syncButton;
     LcdDisplay lcd;
     juce::ArrowButton prevPatch { "prev", 0.5f, Theme::orange }, nextPatch { "next", 0.0f, Theme::orange };
-    juce::TextButton learnButton { "MIDI LEARN" };
+    juce::TextButton learnButton { "MIDI LEARN" }, panicButton { "PANIC" };
 
     OscPanel osc1, osc2, osc3;
     LfoPanel lfo;

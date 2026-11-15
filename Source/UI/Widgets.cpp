@@ -115,7 +115,12 @@ ParamCombo::ParamCombo (UiContext& c, const char* paramId, juce::Colour accent)
 {
     jassert (paramIndex >= 0);
     getProperties().set (learnProperty, paramIndex);
-    addItemList (juce::StringArray::fromTokens (Params::specs[paramIndex].choices, "|", ""), 1);
+    const auto& spec = Params::specs[paramIndex];
+    if (spec.unit == Params::Unit::Note)
+        for (int n = static_cast<int> (spec.min); n <= static_cast<int> (spec.max); ++n)
+            addItem (juce::MidiMessage::getMidiNoteName (n, true, true, 3) + "  (" + juce::String (n) + ")", n - static_cast<int> (spec.min) + 1);
+    else
+        addItemList (juce::StringArray::fromTokens (spec.choices, "|", ""), 1);
     setColour (juce::ComboBox::outlineColourId, accent);
     setColour (juce::ComboBox::arrowColourId, accent);
     setTooltip (Params::specs[paramIndex].name);

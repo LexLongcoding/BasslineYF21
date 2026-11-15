@@ -127,6 +127,11 @@ public:
 private:
     void jumpTo (double position)
     {
+        if (gateOpen)          // a held note doesn't survive a jump: close it on the next tick
+        {
+            slideHold = false;
+            gateOffAt = position;
+        }
         pos = position;
         nextIndex = firstStepFrom (position);
         nextTime = stepTime (nextIndex);

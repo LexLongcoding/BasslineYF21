@@ -9,10 +9,9 @@ namespace
 {
     const char* noteNames[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B", "C" };
 
-    juce::String trigKeyName (int slot, int trigOct)
+    juce::String trigKeyName (int slot, int trigBase)
     {
-        const int note = 24 - 12 * (2 - trigOct) + slot;
-        return juce::MidiMessage::getMidiNoteName (note, true, true, 3);
+        return juce::MidiMessage::getMidiNoteName (trigBase + slot, true, true, 3);
     }
 
     // row colours: rest dim, slide cyan, accent pink, octave orange
@@ -395,7 +394,7 @@ void SlotStrip::paint (juce::Graphics& g)
 void SlotStrip::mouseMove (const juce::MouseEvent& e)
 {
     const int s = slotAt (e.x);
-    const int trigOct = static_cast<int> (ctx.proc.apvts.getRawParameterValue ("seq_trigoct")->load());
+    const int trigOct = ctx.proc.getTriggerBase();
     if (auto* tip = dynamic_cast<juce::SettableTooltipClient*> (getParentComponent()))
         juce::ignoreUnused (tip);
     if (ctx.setLcd)
@@ -539,7 +538,7 @@ void MiniKeyboard::tick()
 //==============================================================================
 SequencerPanel::SequencerPanel (UiContext& c)
     : ctx (c),
-      mode (c, "seq_mode", orange), start (c, "seq_start", orange), keys (c, "seq_trigoct", orange),
+      mode (c, "seq_mode", orange), start (c, "seq_start", orange), keys (c, "seq_trigbase", orange),
       swing (c, "seq_swing", orange), gate (c, "seq_gate", orange),
       keyboard (c), slots (c), grid (c)
 {
@@ -679,7 +678,7 @@ void SequencerPanel::paint (juce::Graphics& g)
     g.setFont (mono (10.0f));
     g.drawText ("PLAY MODE", mode.getBounds().translated (0, -15).withHeight (14), juce::Justification::bottomLeft);
     g.drawText ("PATTERN START", start.getBounds().translated (0, -15).withHeight (14), juce::Justification::bottomLeft);
-    g.drawText ("TRIGGER KEYS", keys.getBounds().translated (0, -15).withHeight (14), juce::Justification::bottomLeft);
+    g.drawText ("TRIGGER KEYS FROM", keys.getBounds().translated (0, -15).withHeight (14), juce::Justification::bottomLeft);
     g.drawText ("KEYS OCT " + juce::String (keyboard.octave > 0 ? "+" : "") + juce::String (keyboard.octave),
                 kbLabelArea, juce::Justification::centred);
 
@@ -707,7 +706,7 @@ juce::String SequencerPanel::statusText() const
         return t;
     }
     if (free) return "FREE MODE // EVERY KEY PLAYS THE SYNTH";
-    const int trigOct = static_cast<int> (p.apvts.getRawParameterValue ("seq_trigoct")->load());
+    const int trigOct = p.getTriggerBase();
     return "PATTERN MODE // " + trigKeyName (0, trigOct) + "-" + trigKeyName (15, trigOct)
            + " PLAY SLOTS 1-16, HIGHER KEYS TRANSPOSE";
 }

@@ -9,7 +9,7 @@
 // patch files store values by these IDs.
 namespace Params
 {
-    enum class Unit { Percent, Bipolar, Hz, Time, Semitones, Cents, Octave, Integer, Toggle, Choice, Bpm, Swing };
+    enum class Unit { Percent, Bipolar, Hz, Time, Semitones, Cents, Octave, Integer, Toggle, Choice, Bpm, Swing, Note };
 
     struct Spec
     {
@@ -127,7 +127,8 @@ namespace Params
         // FREE: a plain mono synth - every key plays (overlap = slide, velocity >= 100 = accent).
         { "seq_mode",   "Play Mode",      "MODE",  0, 1, 0, 0, U::Choice, "PATTERN|FREE", false },
         { "seq_start",  "Pattern Start",  "START", 0, 1, 0, 1, U::Choice, "RETRIG|SYNC", false },
-        { "seq_trigoct","Trigger Keys",   "KEYS",  0, 2, 0, 2, U::Choice, "C-2|C-1|C0", false },
+        // first of the 16 slot trigger keys, as a MIDI note (0 = C-2 ... 60 = C3; middle C = C3)
+        { "seq_trigbase","Trigger Keys Start", "KEYS", 0, 60, 0, 24, U::Note, nullptr, false },
     };
 
     constexpr int numParams = static_cast<int> (sizeof (specs) / sizeof (specs[0]));

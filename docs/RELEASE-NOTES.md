@@ -3,6 +3,12 @@
 - New: user manual (PDF, included in every download): installing, every control, the sequencer and its symbols,
   step and live recording, PATTERN and FREE modes in a DAW, tempo and sync, MIDI learn, patches and patterns,
   sound design tips and troubleshooting.
+- Fixed: a note could hang (drone) when a synth note overlapped the start of a slot trigger key, when a note
+  ended after changing PLAY MODE, or when the DAW stopped without sending note-offs. Every note's end now undoes
+  exactly what its start did, and stopping the DAW ends patterns started by trigger keys.
+- New: PANIC button in the header (all notes off, stops the sequencer, silent immediately).
+- New: TRIGGER KEYS FROM can start on any note from C-2 to C3, one semitone at a time (was C-2 / C-1 / C0).
+  Older projects are converted.
 - Windows build: cleaned up compiler warnings.
 
 ## v0.1.0 - first build

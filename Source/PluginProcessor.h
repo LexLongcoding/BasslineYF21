@@ -69,6 +69,10 @@ public:
     float getDisplayBpm() const     { return displayBpm.load (std::memory_order_relaxed); }
     bool isHostSynced() const       { return hostSynced.load (std::memory_order_relaxed); }
 
+    // PANIC: stops the sequencer and silences the voice at once, forgetting every held note.
+    void panic()                    { playRequested.store (false); panicRequested.store (true); }
+    int  getTriggerBase() const     { return juce::roundToInt (raw[static_cast<size_t> (ix.trigBase)]->load()); }
+
     // The on-screen keyboard: always plays the synth (and step/live records), never triggers slots.
     void uiNote (int note, float velocity);   // velocity 0 = note off
 
@@ -131,7 +135,7 @@ private:
         int fltMode, cutoff, reso, envMod, decay, accent, drive, keyTrack;
         int attack, ampDecay, sustain, release, slide;
         int foldAmount, foldSym, foldMix, distType, distDrive, distTone, distMix;
-        int volume, tune, tempo, sync, swing, gate, mode, start, trigOct;
+        int volume, tune, tempo, sync, swing, gate, mode, start, trigBase;
     } ix {};
 
     // ---- audio thread state
@@ -164,6 +168,12 @@ private:
         void clear() { count = 0; }
     };
     NoteStack liveNotes, triggerNotes, transposeNotes;
+    // What each incoming MIDI note did when it started, so its note-off undoes exactly that,
+    // whatever the mode or the other keys are doing by then.
+    enum class Role : uint8_t { None, Live, Trigger, Transpose };
+    std::array<Role, 128> noteRole {};
+    bool hostWasPlaying = false;
+    void releaseEverything();
     bool seqFromTrigger = false, seqOwnsVoice = false;
     int lastRecordedStep = -1;
 
@@ -172,7 +182,7 @@ private:
     juce::AbstractFifo uiFifo { 64 };
     std::array<UiNote, 64> uiNotes {};
 
-    std::atomic<bool> playRequested { false }, recordArmed { false };
+    std::atomic<bool> playRequested { false }, recordArmed { false }, panicRequested { false };
     std::atomic<int> editSlot { 0 }, editStep { 0 };
     std::atomic<bool> seqRunning { false }, triggeredByMidi { false }, hostSynced { false };
     std::atomic<int> playingSlot { -1 }, playingStep { -1 }, transposeNow { 0 };

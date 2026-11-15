@@ -68,13 +68,17 @@ BasslineAudioProcessorEditor::BasslineAudioProcessorEditor (BasslineAudioProcess
     learnButton.setClickingTogglesState (true);
     learnButton.setColour (juce::TextButton::buttonOnColourId, learn);
     learnButton.onClick = [this] { setLearnMode (learnButton.getToggleState()); };
+    panicButton.setColour (juce::TextButton::buttonOnColourId, pink);
+    panicButton.setColour (juce::TextButton::buttonColourId, pink.withAlpha (0.25f));
+    panicButton.setTooltip ("All notes off: stops the sequencer and silences the synth immediately");
+    panicButton.onClick = [this] { synth.panic(); setLcd ("PANIC // ALL NOTES OFF, SEQUENCER STOPPED", pink); };
     lcd.setMouseCursor (juce::MouseCursor::PointingHandCursor);
     lcd.onClick = [this] { showPatchMenu(); };
     prevPatch.onClick = [this] { synth.patches.loadNext (-1); updatePatchText(); lcd.clearMessage(); };
     nextPatch.onClick = [this] { synth.patches.loadNext (+1); updatePatchText(); lcd.clearMessage(); };
 
     for (juce::Component* c : std::initializer_list<juce::Component*> {
-             &bpm, &syncButton, &lcd, &prevPatch, &nextPatch, &learnButton,
+             &bpm, &syncButton, &lcd, &prevPatch, &nextPatch, &learnButton, &panicButton,
              &osc1, &osc2, &osc3, &lfo, &filter, &amp, &fold, &dist, &scope, &master, &sequencer })
         canvas.addAndMakeVisible (c);
     canvas.addChildComponent (overlay);
@@ -165,10 +169,12 @@ void BasslineAudioProcessorEditor::resized()
     // header, right-aligned
     auto header = juce::Rectangle<int> (20, 26, designWidth - 40, 38);
     learnButton.setBounds (header.removeFromRight (130).reduced (0, 2));
+    header.removeFromRight (10);
+    panicButton.setBounds (header.removeFromRight (90).reduced (0, 2));
     header.removeFromRight (16);
     nextPatch.setBounds (header.removeFromRight (26).reduced (4, 10));
     header.removeFromRight (2);
-    lcd.setBounds (header.removeFromRight (340).reduced (0, 2));
+    lcd.setBounds (header.removeFromRight (300).reduced (0, 2));
     header.removeFromRight (2);
     prevPatch.setBounds (header.removeFromRight (26).reduced (4, 10));
     header.removeFromRight (24);
